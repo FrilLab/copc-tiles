@@ -24,7 +24,7 @@ and any loaded record reports incomplete child discovery, the reader returns
 The optional `CopcAdapterNodeSource` is typed against a structural subset of
 the public `CopcSource` API. A compile-time assertion checks that
 `CopcSource` from `@frillab/copc-adapter/cesium` satisfies that subset. The
-bridge imports no Adapter runtime module and no Adapter private path.
+structural bridge imports no Adapter runtime module or private path.
 
 The bridge calls `loadPreparedPointData` when that public method exists. That
 path aliases the prepared A buffers through T1 and supplies a generation and
@@ -34,6 +34,14 @@ application-supplied preparation callback. The point-view path also requires
 an application-supplied decoder. These callbacks must use public Adapter
 capabilities and return validated `TilePointView` data. The Tiles package does
 not duplicate LAZ decoding, Range reads, or coordinate transforms.
+
+`createCopcJsAdapterNodeSource` is the optional integration factory for the
+public `@frillab/copc-adapter/cesium` entrypoint. When fused preparation is
+absent, it dynamically imports the public
+`transformPointBufferToPreparedPointData` helper and maps its A buffers into
+the source-neutral view. This renderer-entrypoint fallback is isolated from
+the engine initialization graph; a renderer-neutral public preparation API
+is still preferable and remains part of the proposal below.
 
 Public Adapter point-load methods accept `AbortSignal`. Hierarchy page loading
 does not: the bridge checks cancellation and generation before and after the
@@ -62,9 +70,32 @@ those arrays.
 | Request node keys without Direct `NodeSelector` or `StreamingManager` | Implemented in `src/source/tileNodeReader.ts`; repository scan shows neither is imported. |
 | Lazy hierarchy pages and bounded traversal | Implemented; fixture tests assert early stop, page bounds, incomplete hierarchy and safe ranges. |
 | Avoid duplicate requests | Duplicate requested keys in a batch are collapsed; exact fixture point-call count is one per unique key. Cross-call concurrent deduplication is a T8 resource-provider concern. |
-| Prepared and buffer/view outputs | Adapter bridge supports public fused prepared reads; buffer/view paths use explicit callbacks. Mocked public-shape tests pass. Actual copc-js and Rust backend outputs have not been run. |
+| Prepared and buffer/view outputs | Public fused reads are preferred; `createCopcJsAdapterNodeSource` provides a dynamic public-helper fallback. Real `copcJsBackend` output was tested with Autzen; Rust backend remains untested. |
 | Cancellation and generations | Point reads receive a composed `AbortSignal`; source/transform generation is checked before and after awaits. Adapter hierarchy page reads cannot be aborted in flight. |
-| Damaged Range and malformed hierarchy | Errors propagate without retry; malformed/unsafe hierarchy ranges fail before node data reads. No real HTTP Range endpoint has been exercised. |
+| Damaged Range and malformed hierarchy | Errors propagate without retry; malformed/unsafe hierarchy ranges fail before node data reads. The real Autzen check used a local bounded HTTP Range endpoint and confirmed six requests / 205,026 bytes rather than downloading the 81,123,042-byte object. |
+
+## Real Autzen evidence
+
+On the campaign machine, the public Adapter 0.6.0 `copcJsBackend` opened the
+public Autzen sample (`https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz`;
+81,123,042 bytes; SHA-256
+`db2d56cdfa058bffccdc5d6019dae2fc9c6a551df10a5523c06c76a3e25a27fa`) using
+local HTTP Range responses. To rerun the browser check, provide the verified
+file path with `COPC_TILES_AUTZEN=/path/to/autzen-classified.copc.laz`.
+The Tiles reader
+resolved hierarchy pages and requested node `5-8-6-0` (6,529 points) under
+the configured 8,192-point / 2 MiB point-data limits. Available fields were
+`position`, `rgb`, `intensity`, and `classification`; returned samples were
+compared with the public Adapter point view. Six Range requests transferred
+205,026 bytes. The public buffer preparation helper produced ECEF Float64
+coordinates; source CRS was retained as unverified WKT and vertical datum as
+unknown. The encoded 151,650-byte GLB passed Khronos validation with zero
+errors and warnings. A test-only one-node wrapper passed the CesiumGS validator.
+
+This does not verify the full COPC hierarchy as a production tileset, nor
+Cesium/Three rendering of the real node. Actual preparation used the public
+`/cesium` entrypoint because a fused prepared-point method was not present in
+this backend instance. No Adapter internals were imported.
 
 ## Adapter issue #383 proposal
 
@@ -93,6 +124,7 @@ No Adapter files or issues are changed by this campaign.
 ## Evidence boundary
 
 Tests use deterministic source fixtures and structurally compatible mocked
-Adapter sources. Type tests compile against the published public 0.6.0 package
-types. This verifies shape compatibility, not a real COPC read, backend decode,
-HTTP Range behavior, or a production E cache path.
+Adapter sources, plus the bounded real Autzen/copc-js run above. Type tests
+compile against the published public 0.6.0 package types. This verifies one
+real public backend path, not the Rust backend, experimental E cache, full
+production tileset hierarchy, or in-flight hierarchy-page cancellation.

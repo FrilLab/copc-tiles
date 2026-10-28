@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+# Browser verification output
+test-results/
+playwright-report/

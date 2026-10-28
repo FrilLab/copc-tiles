@@ -30,6 +30,7 @@ type PublicCopcNode = Readonly<{
 
 /** Structural subset of CopcSource's verified public 0.6.0 API. */
 export interface PublicCopcNodeSource {
+  getMetadata?(): unknown;
   getRootHierarchyPage(): TileHierarchyPage;
   loadHierarchyPage(page: TileHierarchyPage): Promise<Readonly<{ nodes: readonly PublicCopcNode[]; pages: readonly TileHierarchyPage[] }>>;
   loadPointDataView(
