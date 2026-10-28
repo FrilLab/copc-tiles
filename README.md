@@ -72,7 +72,7 @@ The goal is to implement and independently verify all twelve issues. These are *
 
 ## Development policy
 
-See [AGENTS.md](AGENTS.md). Work on one issue / independent PR at a time, document actual validations, and stop at **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. README is in Korean for project tracking and contributor guidance.
+See [AGENTS.md](AGENTS.md). Work on one issue / independent PR at a time, document actual validations, and stop at **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README is the public architecture and implementation roadmap.
 
 ## Original planning history
 
