@@ -14,8 +14,8 @@ unit.
 | T3 — Precision | Partial | Commit `94b8938`. Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
 | T4 — GLB | Partial | Commit `d1a2621`. Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
 | T5 — Tileset geometry | Partial | Commit `97f9fc9`. `createExplicitTileset` builds a metadata-only 3D Tiles 1.1 hierarchy from complete node records and conservative ECEF bounds; checks octree relationships, containment and bounded totals; emits local boxes, relative translations and monotone spatial-coverage geometric errors. Fixture suite and official CesiumGS validator pass. Public Adapter 0.6.0 per-node conservative ECEF bounds/provenance are unavailable, so no real-source tileset evidence. |
-| T6 — Implicit tiling | Partial | Working tree: sparse `OCTREE` implicit root, Morton indexing, fixed subtree roots, availability bitstreams/constants and 24-byte binary subtree files exist. Fixture suite and official CesiumGS validator pass. Adapter-derived ECEF cell bounds and real COPC hierarchy remain blocked by missing public bounds/provenance; no real-source evidence. |
-| T7 — Metadata | Planned | No glTF metadata mapping yet. |
+| T6 — Implicit tiling | Partial | Commit `dc7bd9d`. Sparse `OCTREE` implicit root, Morton indexing, fixed subtree roots, availability bitstreams/constants and 24-byte binary subtree files exist. Fixture suite and official CesiumGS validator pass. Adapter-derived ECEF cell bounds and real COPC hierarchy remain blocked by missing public bounds/provenance; no real-source evidence. |
+| T7 — Metadata | Partial | Commit pending. LAS intensity/classification and Float64/Int64/Uint64 extra dimensions are preserved per point through glTF `EXT_structural_metadata` property tables indexed by `EXT_mesh_features`. The Khronos glTF validator and extension-aware CesiumGS validator pass fixtures. Adapter named-extra requests remain unavailable; Cesium/Three metadata runtime tests are pending. |
 | T8 — Resource serving | Planned | No URL-addressable provider, bounded cache, or lifecycle implementation yet. |
 | T9 — Cesium | Planned | No browser integration or Direct comparison yet. |
 | T10 — Three.js | Planned | No browser integration or byte-equivalence check yet. |
@@ -54,12 +54,12 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm run typecheck` | Pass after T6 changes: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
+| `npm run typecheck` | Pass after T7 changes: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
-| `npm run validate:gltf` | Pass: 6 checks including official Khronos validation of two GLB fixtures, zero validator errors and warnings. |
+| `npm run validate:gltf` | Pass: 8 tests including official Khronos validation of three GLB fixtures and CesiumGS metadata-extension validation; zero errors and warnings. |
 | `npm run validate:tileset` | Pass: T5 hierarchy, bounds, octree rejection, path safety, generated content checks, and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
 | `npm run validate:implicit` | Pass: Morton order, subtree bitstreams, sparse/empty content, limits, bounds and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
-| `npm test` | Pass: 53 T1–T6 fixture and mocked bridge tests. |
+| `npm test` | Pass: 55 T1–T7 fixture and mocked bridge tests. |
 | Browser E2E / packed consumer / performance | Not run; dependent milestones are not implemented yet. |
 
 ## Campaign limitations

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import validator from 'gltf-validator';
+import tilesValidator from '3d-tiles-validator';
 import { createExperimentalETilePointView } from '../src/input/tilePointView.ts';
 import { encodePointCloudGlb, GlbEncodingError } from '../src/gltf/pointCloudGlb.ts';
 
@@ -26,6 +30,7 @@ function pointView({ points = [[6378137, 0, 0], [6378137.25, 0.5, 0.75]], attrib
     ...(attributes.red === undefined ? {} : { rgb: true }),
     ...(attributes.intensity === undefined ? {} : { intensity: true }),
     ...(attributes.classification === undefined ? {} : { classification: true }),
+    ...(attributes.extraDimensions === undefined ? {} : { extraDimensions: Object.keys(attributes.extraDimensions) }),
   } });
 }
 
@@ -113,13 +118,73 @@ test('omits empty-node content and does not write a zero-count accessor', () => 
   assert.equal(encodePointCloudGlb(pointView({ points: [] })), null);
 });
 
-test('rejects inspection fields instead of silently dropping them before T7 metadata support', () => {
-  assertEncodingError('UNSUPPORTED_ATTRIBUTES', () => encodePointCloudGlb(pointView({
-    attributes: {
-      intensity: new Uint16Array([1, 2]),
-      classification: new Uint8Array([2, 3]),
+test('stores LAS inspection fields and wide extra dimensions in indexed structural metadata', () => {
+  const attributes = {
+    red: new Uint16Array([0, 65535]),
+    green: new Uint16Array([3, 32768]),
+    blue: new Uint16Array([65535, 1]),
+    intensity: new Uint16Array([1, 65535]),
+    classification: new Uint8Array([2, 255]),
+    extraDimensions: {
+      scan_angle: new Float64Array([1.25, -12.5]),
+      signed64: new BigInt64Array([-1n, 9_007_199_254_740_993n]),
+      unsigned64: new BigUint64Array([0n, (1n << 64n) - 1n]),
+      '온도 ℃': new Float64Array([18.5, -4.25]),
     },
-  })));
+  };
+  const encoded = encodePointCloudGlb(pointView({ attributes }));
+  assert.ok(encoded);
+  assert.deepEqual(encoded.metadataProperties, ['intensity', 'classification', 'scan_angle', 'signed64', 'unsigned64', '온도 ℃']);
+  const { json, view, binaryStart } = parseGlb(encoded.bytes);
+  assert.deepEqual(json.extensionsUsed, ['EXT_mesh_features', 'EXT_structural_metadata']);
+  const primitive = json.meshes[0].primitives[0];
+  assert.deepEqual(primitive.extensions.EXT_mesh_features.featureIds, [{ featureCount: 2, propertyTable: 0 }]);
+  assert.equal(primitive.attributes._FEATURE_ID_0, undefined);
+  const structural = json.extensions.EXT_structural_metadata;
+  const pointClass = structural.schema.classes.point;
+  const table = structural.propertyTables[0];
+  assert.equal(table.count, 2);
+  assert.equal(table.class, 'point');
+
+  const propertyId = (name) => Object.keys(pointClass.properties).find((id) => pointClass.properties[id].name === name);
+  const readProperty = (name, type) => {
+    const id = propertyId(name);
+    assert.ok(id);
+    const schema = pointClass.properties[id];
+    const storage = table.properties[id];
+    assert.equal(schema.componentType, type);
+    const bufferView = json.bufferViews[storage.values];
+    const offset = binaryStart + bufferView.byteOffset;
+    return [0, 1].map((index) => {
+      const byteOffset = offset + index * ({ UINT8: 1, UINT16: 2, FLOAT64: 8, INT64: 8, UINT64: 8 }[type]);
+      if (type === 'UINT8') return view.getUint8(byteOffset);
+      if (type === 'UINT16') return view.getUint16(byteOffset, true);
+      if (type === 'FLOAT64') return view.getFloat64(byteOffset, true);
+      if (type === 'INT64') return view.getBigInt64(byteOffset, true);
+      return view.getBigUint64(byteOffset, true);
+    });
+  };
+  assert.deepEqual(readProperty('intensity', 'UINT16'), [1, 65535]);
+  assert.deepEqual(readProperty('classification', 'UINT8'), [2, 255]);
+  assert.deepEqual(readProperty('scan_angle', 'FLOAT64'), [1.25, -12.5]);
+  assert.deepEqual(readProperty('signed64', 'INT64'), [-1n, 9_007_199_254_740_993n]);
+  assert.deepEqual(readProperty('unsigned64', 'UINT64'), [0n, (1n << 64n) - 1n]);
+  assert.deepEqual(readProperty('온도 ℃', 'FLOAT64'), [18.5, -4.25]);
+  assert.ok(json.bufferViews.slice(2).every((bufferView) => bufferView.byteOffset % 4 === 0));
+  assert.equal(encoded.bytes.byteLength % 4, 0);
+});
+
+test('reports unsupported metadata values and enforces the metadata property budget', () => {
+  const invalidFloat = pointView({ attributes: { extraDimensions: { invalid: new Float64Array([Number.NaN, 1]) } } });
+  assertEncodingError('UNSUPPORTED_METADATA', () => encodePointCloudGlb(invalidFloat));
+  const longName = 'x'.repeat(129);
+  const invalidName = pointView({ attributes: { extraDimensions: { [longName]: new Float64Array([1, 2]) } } });
+  assertEncodingError('UNSUPPORTED_METADATA', () => encodePointCloudGlb(invalidName));
+  const tooMany = pointView({ attributes: {
+    intensity: new Uint16Array([1, 2]),
+    classification: new Uint8Array([2, 3]),
+  } });
+  assertEncodingError('ATTRIBUTE_LIMIT', () => encodePointCloudGlb(tooMany, { maxMetadataProperties: 1 }));
 });
 
 test('fails on malformed RGB, excessive point counts, and output sizes', () => {
@@ -138,12 +203,51 @@ test('generated GLBs pass the official Khronos glTF Validator', async () => {
       green: new Uint16Array([1, 32768]),
       blue: new Uint16Array([65535, 0]),
     } })),
+    encodePointCloudGlb(pointView({ attributes: {
+      intensity: new Uint16Array([25, 65535]),
+      classification: new Uint8Array([2, 17]),
+      extraDimensions: { precise: new Float64Array([1.25, 9_007_199_254_740_992]) },
+    } })),
   ];
   for (const fixture of fixtures) {
     assert.ok(fixture);
     const report = await validator.validateBytes(new Uint8Array(fixture.bytes), { uri: 'point-cloud.glb' });
     assert.equal(report.issues.numErrors, 0, JSON.stringify(report.issues.messages));
     assert.equal(report.issues.numWarnings, 0, JSON.stringify(report.issues.messages));
+  }
+});
+
+test('CesiumGS 3D Tiles Validator validates structural metadata and per-point feature lookup', async () => {
+  const fixture = encodePointCloudGlb(pointView({ attributes: {
+    intensity: new Uint16Array([12, 65535]),
+    classification: new Uint8Array([2, 18]),
+    extraDimensions: {
+      elevationOffset: new Float64Array([0.125, -0.25]),
+      exactSigned: new BigInt64Array([-5n, 9_007_199_254_740_993n]),
+      exactUnsigned: new BigUint64Array([3n, (1n << 64n) - 1n]),
+    },
+  } }));
+  assert.ok(fixture);
+  const directory = await mkdtemp(join(tmpdir(), 'copc-tiles-t7-'));
+  try {
+    await writeFile(join(directory, 'tileset.json'), JSON.stringify({
+      asset: { version: '1.1' },
+      geometricError: 0,
+      root: {
+        boundingVolume: { box: [0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 100] },
+        geometricError: 0,
+        refine: 'ADD',
+        content: { uri: 'points.glb' },
+      },
+    }));
+    await writeFile(join(directory, 'points.glb'), fixture.bytes);
+    const report = await tilesValidator.Validators.validateTilesetFile(join(directory, 'tileset.json'));
+    const errors = report.issues.filter((issue) => issue.severity === 'ERROR');
+    const warnings = report.issues.filter((issue) => issue.severity === 'WARNING');
+    assert.deepEqual(errors, [], report.serialize());
+    assert.deepEqual(warnings, [], report.serialize());
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

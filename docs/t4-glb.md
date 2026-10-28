@@ -23,9 +23,8 @@ stride: six bytes hold RGB and two bytes are alignment padding. This is required
 for four-byte vertex alignment while retaining all 16-bit channel values.
 
 Intensity, classification and extra dimensions are not silently discarded.
-T4 fails with `UNSUPPORTED_ATTRIBUTES` when they are present; T7 will add the
-metadata representation before these fields can be accepted in an encoded
-resource.
+T7 writes them through `EXT_structural_metadata` and `EXT_mesh_features`;
+unsupported representations fail with an explicit metadata error.
 
 ## Validation
 
