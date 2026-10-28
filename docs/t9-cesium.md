@@ -11,7 +11,10 @@ ECEF tile centers, red/green/blue rendered pixels, resource cache reuse, and
 
 The browser run uses headless Chromium with SwiftShader on the recorded
 development environment. It is deterministic renderer integration evidence,
-not a hardware GPU benchmark or real COPC hierarchy test.
+not a hardware GPU benchmark or real COPC hierarchy test. One run measured
+819.0 ms to load the initial fixture tiles and 357.3 ms for the two frames
+after load at 640×480. Browser startup, cold fixture requests and SwiftShader
+are included; this timing is not a stable performance baseline.
 
 ## Real Adapter boundary
 

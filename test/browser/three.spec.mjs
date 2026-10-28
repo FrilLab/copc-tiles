@@ -10,6 +10,9 @@ test('Three.js TilesRenderer loads the same GLBs, points, colors and indexed met
   const result = await page.evaluate(() => window.startThree());
 
   assert.equal(result.pointCount, 6, 'the loaded GLTF POINTS geometries contain all six fixture points');
+  assert.ok(result.allModelsLoadMilliseconds > 0);
+  assert.ok(result.postLoadRenderMilliseconds >= 0);
+  assert.equal(result.modelLoadMilliseconds.length, 2);
   assert.ok(result.activeTiles >= 2, 'the renderer has root and child tiles active');
   assert.ok(result.models.every((model) => model.colors.length > 0), 'RGB accessors reach Three.js vertex-color attributes');
   assert.ok(result.models.every((model) => model.metadataProperties.length === 1), 'structural metadata extension is consumed');
@@ -27,6 +30,7 @@ test('Three.js TilesRenderer loads the same GLBs, points, colors and indexed met
   expectSharedTileResources(result);
   assert.ok(result.resources.cache.cacheEntries >= 3, 'the tile resource server reused bounded cached fixture resources');
   assert.deepEqual(pageErrors, []);
+  console.log(`Three fixture: all models ${result.allModelsLoadMilliseconds.toFixed(1)} ms, post-load frames ${result.postLoadRenderMilliseconds.toFixed(1)} ms`);
 
   const cleanup = await page.evaluate(() => window.disposeThree());
   assert.ok(cleanup.activeTilesBeforeDispose >= 2);

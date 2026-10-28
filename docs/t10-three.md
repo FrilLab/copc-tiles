@@ -12,7 +12,10 @@ non-background rendered pixels, cached resources, and tile/group disposal.
 This uses the same 3D Tiles/glTF bytes as Cesium. No Three-specific tile format
 or geometry encoding is introduced. The recorded run uses headless Chromium
 and SwiftShader; it is renderer integration evidence, not a hardware GPU
-benchmark.
+benchmark. One run measured 74.8 ms until both models loaded and 19.5 ms for
+the two frames after load at 640×480. This Three run followed Cesium in the
+same browser server and reused its fixture resource cache, so the values are
+not directly comparable with the Cesium cold-load time.
 
 ## Real Adapter boundary
 

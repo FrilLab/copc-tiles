@@ -59,6 +59,7 @@ function inspectModel(scene, url) {
 }
 
 window.startThree = async () => {
+  const startedAt = performance.now();
   const canvas = document.getElementById('threeCanvas');
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
@@ -86,10 +87,12 @@ window.startThree = async () => {
   scene.add(tiles.group);
 
   const models = [];
+  const modelLoadMilliseconds = [];
   const settled = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Three renderer loaded ${models.length} of 2 point-cloud tiles.`)), 45_000);
     tiles.addEventListener('load-model', (event) => {
       models.push(inspectModel(event.scene, event.url));
+      modelLoadMilliseconds.push(performance.now() - startedAt);
       if (models.length >= 2) {
         clearTimeout(timeout);
         resolve();
@@ -110,10 +113,12 @@ window.startThree = async () => {
   };
   renderFrame();
   await settled;
+  const allModelsLoadedAt = performance.now();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   camera.updateMatrixWorld();
   tiles.update();
   renderer.render(scene, camera);
+  const firstRenderedFrameAt = performance.now();
   const resources = await (await fetch('/__stats')).json();
   const gl = renderer.getContext();
   return {
@@ -122,6 +127,9 @@ window.startThree = async () => {
     activeTiles: tiles.activeTiles.size,
     resources,
     pixels: readRenderedPixels(canvas, gl),
+    modelLoadMilliseconds,
+    allModelsLoadMilliseconds: allModelsLoadedAt - startedAt,
+    postLoadRenderMilliseconds: firstRenderedFrameAt - allModelsLoadedAt,
   };
 };
 

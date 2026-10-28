@@ -27,6 +27,7 @@ function readRenderedPixels(canvas, gl) {
 }
 
 window.startCesium = async () => {
+  const startedAt = performance.now();
   viewer = new Cesium.Viewer(document.getElementById('cesiumContainer'), {
     baseLayer: false,
     terrainProvider: new Cesium.EllipsoidTerrainProvider(),
@@ -93,8 +94,10 @@ window.startCesium = async () => {
   });
 
   await loaded;
+  const initialTilesLoadedAt = performance.now();
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   viewer.render();
+  const firstRenderedFrameAt = performance.now();
   const canvas = viewer.scene.canvas;
   const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
   if (!gl) throw new Error('Cesium did not create a public WebGL canvas context.');
@@ -107,6 +110,8 @@ window.startCesium = async () => {
     resources,
     pixels: readRenderedPixels(canvas, gl),
     tilesLoaded: tileset.tilesLoaded,
+    initialTilesLoadMilliseconds: initialTilesLoadedAt - startedAt,
+    postLoadRenderMilliseconds: firstRenderedFrameAt - initialTilesLoadedAt,
   };
 };
 

@@ -16,6 +16,8 @@ test('CesiumJS loads, places, refines, renders and destroys standard point-cloud
   assert.ok(result.tileLoads.every((tile) => Math.abs(tile.center[1]) < 10));
   assert.ok(result.tileLoads.every((tile) => Math.abs(tile.center[2]) < 10));
   assert.equal(result.tilesLoaded, true);
+  assert.ok(result.initialTilesLoadMilliseconds > 0);
+  assert.ok(result.postLoadRenderMilliseconds >= 0);
   assert.ok(result.pixels.nonBlackPixels > 0, 'Cesium rendered non-background pixels from the loaded tiles');
   assert.ok(result.pixels.colorPixels.red > 0, 'Cesium rendered the source red point color');
   assert.ok(result.pixels.colorPixels.green > 0, 'Cesium rendered the source green point color');
@@ -25,6 +27,7 @@ test('CesiumJS loads, places, refines, renders and destroys standard point-cloud
   assert.equal(result.resources.providerReads.filter((uri) => uri === rootContentUri).length, 1);
   assert.equal(result.resources.providerReads.filter((uri) => uri === childContentUri).length, 1);
   assert.deepEqual(pageErrors, []);
+  console.log(`Cesium fixture: initial tiles ${result.initialTilesLoadMilliseconds.toFixed(1)} ms, post-load frames ${result.postLoadRenderMilliseconds.toFixed(1)} ms`);
 
   const cleanup = await page.evaluate(() => window.disposeCesium());
   assert.equal(cleanup.viewerDestroyed, true, 'the public Viewer.destroy lifecycle completes');

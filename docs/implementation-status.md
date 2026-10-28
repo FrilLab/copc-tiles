@@ -20,7 +20,7 @@ unit.
 | T9 — Cesium | Partial | Commit `acdfc6f`. Public CesiumJS `Viewer` and `Cesium3DTileset.fromUrl` browser test loads, refines, positions, colors and destroys fixture tiles through the real T8 handler. Real Autzen tile rendering is not claimed: the test-only single-node wrapper was culled. See `docs/t9-cesium.md`. |
 | T10 — Three.js | Partial | Commit `acdfc6f`. Public `3d-tiles-renderer`, Three.js, `GLTFLoader`, `GLTFMeshFeaturesExtension` and `GLTFStructuralMetadataExtension` browser test consumes the same fixture tile bytes, checks points/colors/metadata/placement, renders, and disposes. Real Autzen rendering is not claimed. See `docs/t10-three.md`. |
 | T11 — Standards/security | Partial | Validator/browser evidence in `acdfc6f`; security audit in `699efc1`. Khronos glTF and CesiumGS 3D Tiles validators pass fixture output and the one-node Autzen wrapper. Unit suites cover malformed binary lengths, attributes, ranges, hierarchy, unsafe numeric values, cancellation and configured work limits. Full attack-surface audit remains incomplete; five high npm advisories remain in development-only 3D Tiles validator/sharp dependencies. |
-| T12 — Performance/package | Partial | Package build/exports in `acdfc6f`; benchmark and readiness evidence in `699efc1`. ESM declarations, optional Adapter peer, tarball contents, clean ESM/TypeScript consumer install, source-neutral runtime imports, and deterministic A/E/GLB/resource/cancel-detection measurements exist. No direct-COPC comparison, browser GPU benchmark, transient allocation profile, active-cancel benchmark, or Adapter-only installation comparison is available. |
+| T12 — Performance/package | Partial | Package build/exports in `acdfc6f`; benchmark and readiness evidence in `699efc1`. ESM declarations, optional Adapter peer, tarball contents, clean ESM/TypeScript consumer install, source-neutral runtime imports, and deterministic A/E/GLB/resource/cancel-detection measurements exist. One-run SwiftShader fixture load/render times are recorded; no direct-COPC comparison, hardware GPU benchmark, transient allocation profile, active-cancel benchmark, or comparative install/bundle-size benchmark is available. A clean Adapter-only dependency tree did not include Tiles. |
 
 ## Adapter public API compatibility audit
 
@@ -101,6 +101,13 @@ cold/warm network behavior, larger node counts, and Rust/experimental-E
 measurements are unavailable. No GLB decode benchmark was added because this
 package provides an encoder and delegates decoding to clients.
 
+One headless Chromium / SwiftShader browser run at 640×480 measured Cesium
+fixture initial tile loading at 819.0 ms and two post-load frames at 357.3 ms;
+Three fixture loading at 74.8 ms and two post-load frames at 19.5 ms. Cesium ran
+first with cold fixture resources; Three then used the same resource cache.
+These timings include browser/render startup and are kept as environment
+evidence only, not a Cesium-versus-Three comparison or hardware GPU benchmark.
+
 ## NPM readiness
 
 - Candidate metadata: `@frillab/copc-tiles@0.1.0`, Apache-2.0, ESM-only,
@@ -113,6 +120,9 @@ package provides an encoder and delegates decoding to clients.
   unpacked bytes: built ESM/declarations, docs, README, license and changelog.
   Clean ESM and TypeScript imports passed without installing Adapter.
   `node_modules`, samples, browser outputs and tests are excluded.
+- Adapter-only check: installing `@frillab/copc-adapter@0.6.0` in a fresh
+  consumer produced no `@frillab/copc-tiles` dependency. No package-size or
+  bundle-size comparison is claimed.
 - Publishing checklist: `docs/release-checklist.md`. No package has been
   published. Production dependencies audit clean; development validator stack
   advisories remain disclosed above.
