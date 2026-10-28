@@ -11,8 +11,8 @@ unit.
 | --- | --- | --- |
 | T1 — Input contract | Partial | Commit `d73f4cd`. Source-neutral `TilePointView`, A-shaped and E-shaped structural inputs, field selection, provenance and zero-copy fixture tests exist. Public Adapter E access and named extra-dimension acquisition are unavailable; no real source run yet. |
 | T2 — Node access | Partial | Commit `3bb7dfa`. Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
-| T3 — Precision | Partial | Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
-| T4 — GLB | Planned | No GLB encoder or Khronos validation yet. |
+| T3 — Precision | Partial | Commit `94b8938`. Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
+| T4 — GLB | Partial | Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
 | T5 — Tileset geometry | Planned | No tileset bounds or geometric-error implementation yet. |
 | T6 — Implicit tiling | Planned | No subtree or availability implementation yet. |
 | T7 — Metadata | Planned | No glTF metadata mapping yet. |
@@ -53,10 +53,10 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm test` | Pass: 37 T1–T3 fixture and mocked bridge tests. |
+| `npm test` | Pass: 43 T1–T4 fixture and mocked bridge tests. |
 | `npm run typecheck` | Pass: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
-| Khronos glTF Validator | Not run; no encoder exists yet. |
+| `npm run validate:gltf` | Pass: official Khronos validator, two GLB fixtures, zero errors and warnings. |
 | Cesium 3D Tiles Validator | Not run; no tileset/subtree exists yet. |
 | Browser E2E / packed consumer / performance | Not run; dependent milestones are not implemented yet. |
 
