@@ -9,8 +9,8 @@ unit.
 
 | Milestone | Status | Evidence / remaining work |
 | --- | --- | --- |
-| T1 — Input contract | Partial | Source-neutral `TilePointView`, A-shaped and E-shaped structural inputs, field selection, provenance and zero-copy fixture tests exist. Public Adapter E access and named extra-dimension acquisition are unavailable; no real source run yet. |
-| T2 — Node access | Planned | Public API audited. Implement bounded fixture traversal and requested-node reads; hierarchy-page cancellation and E integration remain open. |
+| T1 — Input contract | Partial | Commit `d73f4cd`. Source-neutral `TilePointView`, A-shaped and E-shaped structural inputs, field selection, provenance and zero-copy fixture tests exist. Public Adapter E access and named extra-dimension acquisition are unavailable; no real source run yet. |
+| T2 — Node access | Partial | Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
 | T3 — Precision | Planned | No tile-local encoder or precision fixtures yet. |
 | T4 — GLB | Planned | No GLB encoder or Khronos validation yet. |
 | T5 — Tileset geometry | Planned | No tileset bounds or geometric-error implementation yet. |
@@ -53,8 +53,8 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm test` | Pass: 9 T1 fixture tests. |
-| `npm run typecheck` | Pass: source and type-test compilation, including the public `PreparedPointData` compatibility assertion. |
+| `npm test` | Pass: 29 T1/T2 fixture and mocked bridge tests. |
+| `npm run typecheck` | Pass: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
 | Khronos glTF Validator | Not run; no encoder exists yet. |
 | Cesium 3D Tiles Validator | Not run; no tileset/subtree exists yet. |

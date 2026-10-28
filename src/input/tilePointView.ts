@@ -166,6 +166,27 @@ type NormalizedSelection = {
 
 const EMPTY_SELECTION: TilePointFieldSelection = Object.freeze({});
 
+/** Validate and snapshot a caller's selection before any asynchronous reads. */
+export function snapshotTilePointFieldSelection(
+  selection: TilePointFieldSelection = EMPTY_SELECTION,
+): TilePointFieldSelection {
+  const normalized = normalizeSelection(selection);
+  const coordinates = Object.freeze({
+    ...(normalized.source ? { source: true } : {}),
+    ...(normalized.geographic ? { geographic: true } : {}),
+    ...(normalized.preparedHeight ? { preparedHeight: true } : {}),
+  });
+  const attributes = Object.freeze({
+    ...(normalized.rgb ? { rgb: true } : {}),
+    ...(normalized.intensity ? { intensity: true } : {}),
+    ...(normalized.classification ? { classification: true } : {}),
+    ...(normalized.extraDimensions.length > 0
+      ? { extraDimensions: Object.freeze([...normalized.extraDimensions]) }
+      : {}),
+  });
+  return Object.freeze({ coordinates, attributes });
+}
+
 /** Create a zero-copy view over A-shaped prepared point data. */
 export function createTilePointViewFromA(
   data: PreparedPointDataAInput,
@@ -231,6 +252,42 @@ export function createExperimentalETilePointView(
     context,
     expected,
     normalized,
+  );
+}
+
+/** Validate and select a view returned by an external source implementation. */
+export function validateTilePointView(
+  input: TilePointView,
+  expected: TileViewExpectation,
+  selection: TilePointFieldSelection = EMPTY_SELECTION,
+): TilePointView {
+  assertRecord(input, 'TilePointView');
+  assertAllowedKeys(
+    input,
+    ['pointCount', 'ecef', 'preparedHeight', 'source', 'geographic', 'attributes', 'context'],
+    'TilePointView',
+    'INVALID_ATTRIBUTE_DATA',
+  );
+  const pointCount = validatePointCount(input.pointCount);
+  const ecef = requireFloat64(input.ecef, pointCount * 3, 'ecef');
+  const preparedHeight = input.preparedHeight === undefined
+    ? undefined
+    : requireFloat64(input.preparedHeight, pointCount, 'preparedHeight');
+  const source = input.source === undefined ? undefined : requireFloat64(input.source, pointCount * 3, 'source');
+  const geographic = input.geographic === undefined
+    ? undefined
+    : requireFloat64(input.geographic, pointCount * 3, 'geographic');
+  const attributes = validateAttributes(input.attributes, pointCount);
+  return assembleView(
+    pointCount,
+    ecef,
+    preparedHeight,
+    source,
+    geographic,
+    attributes,
+    input.context,
+    expected,
+    normalizeSelection(selection),
   );
 }
 
