@@ -15,8 +15,8 @@ unit.
 | T4 — GLB | Partial | Commit `d1a2621`. Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
 | T5 — Tileset geometry | Partial | Commit `97f9fc9`. `createExplicitTileset` builds a metadata-only 3D Tiles 1.1 hierarchy from complete node records and conservative ECEF bounds; checks octree relationships, containment and bounded totals; emits local boxes, relative translations and monotone spatial-coverage geometric errors. Fixture suite and official CesiumGS validator pass. Public Adapter 0.6.0 per-node conservative ECEF bounds/provenance are unavailable, so no real-source tileset evidence. |
 | T6 — Implicit tiling | Partial | Commit `dc7bd9d`. Sparse `OCTREE` implicit root, Morton indexing, fixed subtree roots, availability bitstreams/constants and 24-byte binary subtree files exist. Fixture suite and official CesiumGS validator pass. Adapter-derived ECEF cell bounds and real COPC hierarchy remain blocked by missing public bounds/provenance; no real-source evidence. |
-| T7 — Metadata | Partial | Commit pending. LAS intensity/classification and Float64/Int64/Uint64 extra dimensions are preserved per point through glTF `EXT_structural_metadata` property tables indexed by `EXT_mesh_features`. The Khronos glTF validator and extension-aware CesiumGS validator pass fixtures. Adapter named-extra requests remain unavailable; Cesium/Three metadata runtime tests are pending. |
-| T8 — Resource serving | Planned | No URL-addressable provider, bounded cache, or lifecycle implementation yet. |
+| T7 — Metadata | Partial | Commit `d232f30`. LAS intensity/classification and Float64/Int64/Uint64 extra dimensions are preserved per point through glTF `EXT_structural_metadata` property tables indexed by `EXT_mesh_features`. The Khronos glTF validator and extension-aware CesiumGS validator pass fixtures. Adapter named-extra requests remain unavailable; Cesium/Three metadata runtime tests are pending. |
+| T8 — Resource serving | Partial | Commit pending. Fetch-compatible URL handler with MIME, HEAD/GET, safe path validation, LRU bounds, deduplicated loads, subscriber-aware cancellation, source-generation invalidation, queue/resource limits and optional provider cleanup. Nine focused tests pass. Live Cesium/Three network requests and real Adapter dynamic content remain outstanding. |
 | T9 — Cesium | Planned | No browser integration or Direct comparison yet. |
 | T10 — Three.js | Planned | No browser integration or byte-equivalence check yet. |
 | T11 — Standards/security | Partial | Khronos glTF and CesiumGS 3D Tiles validators run on fixtures; malformed bounds, ranges, hierarchy and output limits have focused tests. Full parser/resource/security coverage remains for T8/T11. |
@@ -59,7 +59,9 @@ gate and proposal tracker; this campaign does not modify that repository.
 | `npm run validate:gltf` | Pass: 8 tests including official Khronos validation of three GLB fixtures and CesiumGS metadata-extension validation; zero errors and warnings. |
 | `npm run validate:tileset` | Pass: T5 hierarchy, bounds, octree rejection, path safety, generated content checks, and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
 | `npm run validate:implicit` | Pass: Morton order, subtree bitstreams, sparse/empty content, limits, bounds and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
-| `npm test` | Pass: 55 T1–T7 fixture and mocked bridge tests. |
+| `npm run validate:resources` | Pass: 9 Fetch handler tests for paths, MIME, cancellation, cache, generation, queue and cleanup. |
+| `npm test` | Pass: 64 T1–T8 fixture and mocked bridge tests. |
+| `npm run typecheck` | Pass after T8 changes: source and type-test compilation, including public Adapter compatibility assertions. |
 | Browser E2E / packed consumer / performance | Not run; dependent milestones are not implemented yet. |
 
 ## Campaign limitations

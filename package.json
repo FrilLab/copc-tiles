@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "validate:gltf": "node --import tsx --test test/pointCloudGlb.test.mjs",
     "validate:tileset": "node --import tsx --test test/explicitTileset.test.mjs",
-    "validate:implicit": "node --import tsx --test test/implicitOctreeTileset.test.mjs"
+    "validate:implicit": "node --import tsx --test test/implicitOctreeTileset.test.mjs",
+    "validate:resources": "node --import tsx --test test/tileResourceServer.test.mjs"
   },
   "peerDependencies": {
     "@frillab/copc-adapter": "0.6.0"
