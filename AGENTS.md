@@ -10,6 +10,23 @@ Repository: `FrilLab/copc-tiles`. This is an **independent optional package**, n
 - When Adapter lacks a necessary read-only hierarchy/node/point/cache view, document the exact missing capability and propose a minimal upstream interface change in a **separate Adapter issue/PR**. Do not change Adapter internals as part of a Tiles PR.
 - Direct Adapter's `.`, `/cesium`, `/three` imports, defaults, binary/API compatibility, existing performance and package footprint must remain unchanged.
 
+## Non-negotiable reuse and future integration rules
+
+These four rules are mandatory for every T1–T12 implementation, review, and future migration into the COPC Adapter repository:
+
+1. **Do not copy Adapter internal files.** No vendoring, copying, mirroring, or adapting private Adapter implementations into Tiles just to bypass an inaccessible API. Do not use undocumented deep imports or private repository paths, including in release builds or temporary production workarounds.
+2. **Do not duplicate Core hierarchy, LAZ, or CRS processing.** Treat COPC hierarchy access, HTTP Range and LAZ decode, coordinate transformation, vertical-datum handling, and prepared/cache data provenance as Adapter-owned responsibilities. Reuse verified public Adapter contracts. Tile-specific hierarchy-to-tileset mapping and tile-local precision encoding are Tiles responsibilities, not replacements for COPC parsing or decoding.
+3. **Keep Tiles code modular and transferable.** Separate Tile input adapters, encoding, metadata, tiling, resource serving, and renderer integration behind clear module boundaries. Do not intertwine Tiles-specific code with Adapter Core/Direct rendering, or create circular imports. Structure code so a future move to an optional `packages/tiles` module in the Adapter monorepo does not require rewriting algorithms.
+4. **Define every Adapter API used.** Maintain an explicit contract inventory for each adapter import: public export/subpath, compatible version, input/output and buffer ownership, cancellation/lifecycle guarantees, and tests. If an essential operation is not exposed publicly, **stop that integration path**, document the missing capability, and propose a narrowly scoped upstream issue/PR. Never silently substitute copied internals or a duplicate decoder.
+
+### Future migration and distribution
+
+- **Development now:** use the standalone repository to minimize concurrent branch conflicts. **Potential later outcome:** integrate the completed Tiles modules into the Adapter repository after T12 review. This is a migration plan, not authorization to change Adapter now.
+- Do **not** lock the design to one eventual npm distribution format. Compare (a) optional `@frillab/copc-adapter/tiles` subpath and (b) separately published `@frillab/copc-tiles` from a shared monorepo. Verify packed installation footprint, runtime bundle graph, renderer dependencies, API compatibility, and release overhead before choosing.
+- A missing Adapter contract is a dependency blocker, not permission to copy source code; coordinate minimal upstream changes separately without destabilizing Direct COPC users.
+- Preserve all T1–T12 evidence across migration: numeric precision, official Tiles/glTF conformance, E/A cache ownership/performance, Cesium/Three consumer tests and package isolation.
+- Before any migration, require a dedicated reviewed PR, import-graph audit, full affected Adapter regressions and packed consumer tests; keep Direct COPC behavior and existing public APIs intact.
+
 ## Engineering contracts
 
 - Target interoperable **3D Tiles 1.1** and **glTF 2.0 POINTS**. No proprietary Tiles extensions, renderer forks, bundled dataset or unreviewed API promises.
