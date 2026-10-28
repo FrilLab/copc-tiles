@@ -10,8 +10,8 @@ unit.
 | Milestone | Status | Evidence / remaining work |
 | --- | --- | --- |
 | T1 — Input contract | Partial | Commit `d73f4cd`. Source-neutral `TilePointView`, A-shaped and E-shaped structural inputs, field selection, provenance and zero-copy fixture tests exist. Public Adapter E access and named extra-dimension acquisition are unavailable; no real source run yet. |
-| T2 — Node access | Partial | Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
-| T3 — Precision | Planned | No tile-local encoder or precision fixtures yet. |
+| T2 — Node access | Partial | Commit `3bb7dfa`. Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
+| T3 — Precision | Partial | Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
 | T4 — GLB | Planned | No GLB encoder or Khronos validation yet. |
 | T5 — Tileset geometry | Planned | No tileset bounds or geometric-error implementation yet. |
 | T6 — Implicit tiling | Planned | No subtree or availability implementation yet. |
@@ -53,7 +53,7 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm test` | Pass: 29 T1/T2 fixture and mocked bridge tests. |
+| `npm test` | Pass: 37 T1–T3 fixture and mocked bridge tests. |
 | `npm run typecheck` | Pass: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
 | Khronos glTF Validator | Not run; no encoder exists yet. |
