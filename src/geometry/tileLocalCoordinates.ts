@@ -150,7 +150,7 @@ export function encodeTileLocalPositions(
     pointCount: view.pointCount,
     positions,
     originEcef: origin,
-    tileTransform: createTranslationTransform(origin, parentOrigin),
+    tileTransform: createTileTranslationTransform(origin, parentOrigin),
     positionMin,
     positionMax,
     maxAbsoluteErrorMeters,
@@ -181,7 +181,12 @@ function copyOrigin(value: Float64Array, name: string): Float64Array {
   return new Float64Array(value);
 }
 
-function createTranslationTransform(origin: Float64Array, parentOrigin: Float64Array): Float64Array {
+export function createTileTranslationTransform(
+  originInput: Float64Array,
+  parentOriginInput: Float64Array = new Float64Array(3),
+): Float64Array {
+  const origin = copyOrigin(originInput, 'originEcef');
+  const parentOrigin = copyOrigin(parentOriginInput, 'parentOriginEcef');
   const dx = origin[0] - parentOrigin[0];
   const dy = origin[1] - parentOrigin[1];
   const dz = origin[2] - parentOrigin[2];

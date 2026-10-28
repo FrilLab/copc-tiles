@@ -9,7 +9,8 @@
   "scripts": {
     "test": "node --import tsx --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "validate:gltf": "node --import tsx --test test/pointCloudGlb.test.mjs"
+    "validate:gltf": "node --import tsx --test test/pointCloudGlb.test.mjs",
+    "validate:tileset": "node --import tsx --test test/explicitTileset.test.mjs"
   },
   "peerDependencies": {
     "@frillab/copc-adapter": "0.6.0"
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@frillab/copc-adapter": "0.6.0",
+    "3d-tiles-validator": "0.6.1",
     "gltf-validator": "2.0.0-dev.3.10",
     "tsx": "^4.23.13",
     "typescript": "~5.9.3"

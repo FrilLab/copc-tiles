@@ -12,8 +12,8 @@ unit.
 | T1 — Input contract | Partial | Commit `d73f4cd`. Source-neutral `TilePointView`, A-shaped and E-shaped structural inputs, field selection, provenance and zero-copy fixture tests exist. Public Adapter E access and named extra-dimension acquisition are unavailable; no real source run yet. |
 | T2 — Node access | Partial | Commit `3bb7dfa`. Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
 | T3 — Precision | Partial | Commit `94b8938`. Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
-| T4 — GLB | Partial | Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
-| T5 — Tileset geometry | Planned | No tileset bounds or geometric-error implementation yet. |
+| T4 — GLB | Partial | Commit `d1a2621`. Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
+| T5 — Tileset geometry | Partial | Working tree: `createExplicitTileset` builds a metadata-only 3D Tiles 1.1 hierarchy from complete node records and conservative ECEF bounds; checks octree relationships, containment and bounded totals; emits local boxes, relative translations and monotone spatial-coverage geometric errors. Fixture suite and official CesiumGS validator pass. Public Adapter 0.6.0 per-node conservative ECEF bounds/provenance are unavailable, so no real-source tileset evidence. |
 | T6 — Implicit tiling | Planned | No subtree or availability implementation yet. |
 | T7 — Metadata | Planned | No glTF metadata mapping yet. |
 | T8 — Resource serving | Planned | No URL-addressable provider, bounded cache, or lifecycle implementation yet. |
@@ -37,6 +37,7 @@ No Adapter source or package-private deep import is used by the Tiles engine.
 | Root hierarchy page | `CopcSource.getRootHierarchyPage()` | 0.6.0 | Yes | Public method. |
 | Lazy hierarchy page access | `CopcSource.loadHierarchyPage(page, options)` | 0.6.0 | Partial | Public method and inferred page/node result types. Its options do not include `AbortSignal`; an in-flight page read cannot be cancelled through this contract. |
 | Stable node keys and completeness | Public hierarchy node returned from page methods, including `key`, coordinates, chunk range, children and `childrenComplete` | 0.6.0 | Partial | Shape can be inferred from public method signatures; node/page types are not independently exported by name. Never treat `childrenComplete !== true` as a proven leaf. |
+| Conservative per-node ECEF bounds | Public hierarchy metadata or node read result with conservative WGS 84 ECEF bounds and source/transform generation | 0.6.0 | No | Tiles can accept bounds from a source-neutral provider, but the Adapter contract does not establish how to derive or invalidate them. No private hierarchy bounds or unverified CRS transform is used. See #383. |
 | Requested node points | `loadPreparedPointData`, `loadPointDataBuffer`, `loadPointDataView` | 0.6.0 | Yes, subject to backend | Public methods; point-load options accept `AbortSignal`. Exact fetch/decode counts and error behavior need connector tests. |
 | Experimental E cache view | Public ECEF Float64 + prepared-height Float64 read-only node view | 0.6.0 | No | No public E cache node/read API. Do not import internal cache types. See Adapter [issue #383](https://github.com/mors119/copc-adapter/issues/383). |
 | Requested standard LAS fields | `CopcPointFieldSelection` and returned attributes | 0.6.0 | Partial | Public selection covers position/RGB/intensity/classification. Verify backend support and missing-field behavior in integration tests. |
@@ -53,11 +54,11 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm test` | Pass: 43 T1–T4 fixture and mocked bridge tests. |
-| `npm run typecheck` | Pass: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
+| `npm test` | Pass: 48 T1–T5 fixture and mocked bridge tests. |
+| `npm run typecheck` | Pass after T5 changes: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
-| `npm run validate:gltf` | Pass: official Khronos validator, two GLB fixtures, zero errors and warnings. |
-| Cesium 3D Tiles Validator | Not run; no tileset/subtree exists yet. |
+| `npm run validate:gltf` | Pass: 6 checks including official Khronos validation of two GLB fixtures, zero validator errors and warnings. |
+| `npm run validate:tileset` | Pass: T5 hierarchy, bounds, octree rejection, path safety, generated content checks, and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
 | Browser E2E / packed consumer / performance | Not run; dependent milestones are not implemented yet. |
 
 ## Campaign limitations
