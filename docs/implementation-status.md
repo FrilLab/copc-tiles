@@ -13,13 +13,13 @@ unit.
 | T2 — Node access | Partial | Commit `3bb7dfa`. Bounded page traversal, requested-node reads, source generation checks, fixture tests, and a structural bridge compatible with public `CopcSource` 0.6.0 types exist. No real COPC or copc-js/Rust backend run; public E access and in-flight hierarchy cancellation remain unavailable. |
 | T3 — Precision | Partial | Commit `94b8938`. Float64 ECEF origin, Float32 glTF Y-up positions, standard axis handling, one placement transform, 1 cm / `1e-7` budgets and synthetic edge fixtures exist. Autzen/reference evidence and maintainer acceptance of thresholds remain outstanding. |
 | T4 — GLB | Partial | Commit `d1a2621`. Deterministic POINTS GLB encoder and full-width normalized Uint16 RGB output exist. Official Khronos validation passes two fixtures with zero errors/warnings; no Cesium/Three render or Autzen node yet. |
-| T5 — Tileset geometry | Partial | Working tree: `createExplicitTileset` builds a metadata-only 3D Tiles 1.1 hierarchy from complete node records and conservative ECEF bounds; checks octree relationships, containment and bounded totals; emits local boxes, relative translations and monotone spatial-coverage geometric errors. Fixture suite and official CesiumGS validator pass. Public Adapter 0.6.0 per-node conservative ECEF bounds/provenance are unavailable, so no real-source tileset evidence. |
-| T6 — Implicit tiling | Planned | No subtree or availability implementation yet. |
+| T5 — Tileset geometry | Partial | Commit `97f9fc9`. `createExplicitTileset` builds a metadata-only 3D Tiles 1.1 hierarchy from complete node records and conservative ECEF bounds; checks octree relationships, containment and bounded totals; emits local boxes, relative translations and monotone spatial-coverage geometric errors. Fixture suite and official CesiumGS validator pass. Public Adapter 0.6.0 per-node conservative ECEF bounds/provenance are unavailable, so no real-source tileset evidence. |
+| T6 — Implicit tiling | Partial | Working tree: sparse `OCTREE` implicit root, Morton indexing, fixed subtree roots, availability bitstreams/constants and 24-byte binary subtree files exist. Fixture suite and official CesiumGS validator pass. Adapter-derived ECEF cell bounds and real COPC hierarchy remain blocked by missing public bounds/provenance; no real-source evidence. |
 | T7 — Metadata | Planned | No glTF metadata mapping yet. |
 | T8 — Resource serving | Planned | No URL-addressable provider, bounded cache, or lifecycle implementation yet. |
 | T9 — Cesium | Planned | No browser integration or Direct comparison yet. |
 | T10 — Three.js | Planned | No browser integration or byte-equivalence check yet. |
-| T11 — Standards/security | Planned | No official validator automation or complete malformed-input suite yet. |
+| T11 — Standards/security | Partial | Khronos glTF and CesiumGS 3D Tiles validators run on fixtures; malformed bounds, ranges, hierarchy and output limits have focused tests. Full parser/resource/security coverage remains for T8/T11. |
 | T12 — Performance/package | Planned | No release build, packed consumer, bundle isolation, or comparative benchmark evidence yet. |
 
 ## Adapter public API compatibility audit
@@ -54,11 +54,12 @@ gate and proposal tracker; this campaign does not modify that repository.
 
 | Command / check | Result |
 | --- | --- |
-| `npm test` | Pass: 48 T1–T5 fixture and mocked bridge tests. |
-| `npm run typecheck` | Pass after T5 changes: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
+| `npm run typecheck` | Pass after T6 changes: source and type-test compilation, including public `PreparedPointData`, `CopcSource`, and `CopcBackend.open` compatibility assertions. |
 | `git diff --check` | Pass. |
 | `npm run validate:gltf` | Pass: 6 checks including official Khronos validation of two GLB fixtures, zero validator errors and warnings. |
 | `npm run validate:tileset` | Pass: T5 hierarchy, bounds, octree rejection, path safety, generated content checks, and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
+| `npm run validate:implicit` | Pass: Morton order, subtree bitstreams, sparse/empty content, limits, bounds and official CesiumGS 3D Tiles Validator; 5 tests, zero validator errors/warnings. |
+| `npm test` | Pass: 53 T1–T6 fixture and mocked bridge tests. |
 | Browser E2E / packed consumer / performance | Not run; dependent milestones are not implemented yet. |
 
 ## Campaign limitations
