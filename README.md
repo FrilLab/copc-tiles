@@ -2,13 +2,13 @@
 
 **COPC → standard 3D Tiles 1.1** as a standalone, optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter).
 
-> **Status: planned / under development.** No production-ready encoder, tileset server, Cesium/Three integration, or published npm package is claimed by this README.
+> **Status: 0.1.0 maintainer review candidate; not published.** The standalone engine, fixture-based Cesium/Three integrations, official validator checks, and one bounded real COPC node path are implemented. Full real COPC hierarchy/rendering remains blocked by missing public Adapter bounds and provenance APIs. See [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ## Why separate?
 
 COPC Adapter streams COPC points directly with CesiumJS and Three.js. COPC Tiles is an independent integration path for clients that require **standards-compliant 3D Tiles**. Projects using only the direct adapter must not pay a Tiles runtime, dependency, or install-size cost.
 
-- Planned package: `@frillab/copc-tiles` (not yet published).
+- Package candidate: `@frillab/copc-tiles@0.1.0` (not published).
 - Adapter package: `@frillab/copc-adapter` ([upstream repository](https://github.com/mors119/copc-adapter)).
 - Dependency direction: **copc-tiles → copc-adapter**, never the reverse.
 - Reuse approved, stable, *public* adapter APIs for COPC hierarchy/Range/decode/CRS and read-only point data. Do not import upstream private `packages/core/**` files.
@@ -42,7 +42,9 @@ Keep transform/height provenance, node identity, precise `Float64` ECEF input, a
 
 ## Roadmap — T1 through T12
 
-The goal is to implement and independently verify all twelve issues. These are **not yet completed**.
+Implementation is tracked against all twelve issues. A milestone remains
+partial until every acceptance criterion is verified; fixture evidence and
+real COPC evidence are reported separately in the implementation status.
 
 | Step | Issue | Deliverable | Dependencies |
 | --- | --- | --- | --- |
@@ -59,7 +61,10 @@ The goal is to implement and independently verify all twelve issues. These are *
 | T11 | [#11](https://github.com/FrilLab/copc-tiles/issues/11) | Tiles/glTF validator, precision and malformed-input gates | Applicable T3–T10; run incrementally |
 | T12 | [#12](https://github.com/FrilLab/copc-tiles/issues/12) | A/E and Direct/Tiles performance, bundle isolation, release readiness | T9–T11 |
 
-**Parallel development:** T2 and T3 may proceed after T1; T4 and T5 can progress on separate modules; T7 can follow T4 while T6 progresses; T11 validators should be introduced as soon as their fixtures exist. Avoid concurrent edits to common contracts until reviewed.
+The public source contract and package usage are documented in
+[`docs/usage.md`](docs/usage.md). See [`docs/implementation-status.md`](docs/implementation-status.md)
+for milestone progress, exact commands, Adapter compatibility, limitations,
+and release classification.
 
 ## Compatibility and release gates
 
@@ -72,7 +77,9 @@ The goal is to implement and independently verify all twelve issues. These are *
 
 ## Development policy
 
-See [AGENTS.md](AGENTS.md). Work on one issue / independent PR at a time, document actual validations, and stop at **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README is the public architecture and implementation roadmap.
+See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
+**AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README
+is the public architecture and implementation roadmap.
 
 ## Original planning history
 

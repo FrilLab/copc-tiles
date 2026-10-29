@@ -1,0 +1,41 @@
+# T8 — URL resources, cancellation, and bounded cache
+
+`createTileResourceServer(provider, options)` exposes a standard Fetch
+`Request -> Response` handler. Mount it at an HTTP route in the host
+application; it does not import Cesium or Three internals. The root URL maps to
+`tileset.json`, and relative paths map directly to tile resources. `GET` and
+`HEAD` are supported. MIME types include `application/json` for tilesets and
+subtree JSON, `model/gltf-binary` for GLB, and `application/octet-stream` for
+binary subtrees and buffers.
+
+The provider contract is source-neutral: opaque source identity, safe
+generation, optional `isCurrent()`, cancellable `getResource(uri, signal)`,
+and optional `close()`. A provider must honor `AbortSignal` for prompt
+cancellation. Concurrent requests for one generation and URI share one load;
+aborting one subscriber does not abort the shared provider call while another
+subscriber remains. The final subscriber abort cancels that call. Source
+switches and generation changes clear the in-memory cache and cancel old
+loads. Old-generation completions receive `410 Gone` and are not cached.
+
+Default limits are 64 MiB per response, 64 MiB and 512 entries in the LRU
+cache, 8 concurrent distinct loads, 64 queued distinct loads, and 32
+subscribers per shared resource. Hard maxima are enforced. Queue saturation
+returns `503`; invalid provider output returns `502`. Unsafe, encoded
+separator, traversal, and double-encoded paths fail closed. Responses use
+`Cache-Control: no-store` so an application switching source generations
+cannot accidentally reuse stale browser data. In-memory reuse is handled by
+the generation-keyed server cache.
+
+`createStaticTileResourceProvider` is intended for deterministic fixtures or
+small prebuilt datasets. It snapshots at most 512 resources and 64 MiB by
+default. Large octrees should use a lazy provider that creates only requested
+content/subtrees; the resource layer does not require whole-octree
+materialization. Providers are caller-owned by default; set
+`closeProviderOnShutdown: true` for the server to close its provider once on
+shutdown or replacement.
+
+`npm run validate:resources` covers MIME types, URL addressing, HEAD/404/405,
+traversal and encoded paths, concurrent deduplication, LRU bounds, active
+cancellation, generation switching, queue saturation, response-size limits,
+and provider cleanup. Live browser loading through Cesium/Three is covered by
+T9/T10 and remains outstanding here.

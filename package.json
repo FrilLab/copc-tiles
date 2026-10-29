@@ -1,0 +1,83 @@
+{
+  "name": "@frillab/copc-tiles",
+  "version": "0.1.0",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "description": "Source-neutral 3D Tiles 1.1 engine for point clouds",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FrilLab/copc-tiles.git"
+  },
+  "homepage": "https://github.com/FrilLab/copc-tiles#readme",
+  "bugs": {
+    "url": "https://github.com/FrilLab/copc-tiles/issues"
+  },
+  "files": [
+    "dist/",
+    "docs/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./adapter/copc-js": {
+      "types": "./dist/adapter/copcJsAdapter.d.ts",
+      "import": "./dist/adapter/copcJsAdapter.js"
+    },
+    "./resources": {
+      "types": "./dist/resources/tileResourceServer.d.ts",
+      "import": "./dist/resources/tileResourceServer.js"
+    },
+    "./tileset": {
+      "types": "./dist/tileset/explicitTileset.d.ts",
+      "import": "./dist/tileset/explicitTileset.js"
+    },
+    "./tileset/implicit": {
+      "types": "./dist/tileset/implicitOctreeTileset.d.ts",
+      "import": "./dist/tileset/implicitOctreeTileset.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "test": "node --import tsx --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "validate:gltf": "node --import tsx --test test/pointCloudGlb.test.mjs",
+    "validate:tileset": "node --import tsx --test test/explicitTileset.test.mjs",
+    "validate:implicit": "node --import tsx --test test/implicitOctreeTileset.test.mjs",
+    "validate:resources": "node --import tsx --test test/tileResourceServer.test.mjs",
+    "test:browser": "playwright test --config test/browser/playwright.config.mjs",
+    "validate:adapter-integration": "playwright test --config test/browser/playwright.config.mjs test/browser/adapter.real.spec.mjs",
+    "bench:engine": "node --expose-gc --import tsx bench/engine.mjs"
+  },
+  "peerDependencies": {
+    "@frillab/copc-adapter": "0.6.0"
+  },
+  "peerDependenciesMeta": {
+    "@frillab/copc-adapter": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@frillab/copc-adapter": "0.6.0",
+    "@playwright/test": "1.64.1",
+    "3d-tiles-renderer": "0.5.3",
+    "3d-tiles-validator": "0.6.1",
+    "cesium": "1.146.0",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "three": "0.186.1",
+    "tsx": "^4.23.13",
+    "typescript": "~5.9.3",
+    "vite": "7.3.7"
+  }
+}
