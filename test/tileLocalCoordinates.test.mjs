@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExperimentalETilePointView } from '../src/input/tilePointView.ts';
-import { encodeTileLocalPositions, TilePrecisionError } from '../src/geometry/tileLocalCoordinates.ts';
+import { createTileTranslationTransform, encodeTileLocalPositions, TilePrecisionError } from '../src/geometry/tileLocalCoordinates.ts';
 
 const context = {
   sourceIdentity: 'precision-fixture',
@@ -26,6 +26,14 @@ function decodeToEcef(result, point) {
   const gltf = result.positions;
   const ecefLocal = [gltf[index], -gltf[index + 2], gltf[index + 1]];
   return ecefLocal.map((value, axis) => value + result.originEcef[axis]);
+}
+
+function transformPoint(matrix, point) {
+  return [
+    matrix[0] * point[0] + matrix[4] * point[1] + matrix[8] * point[2] + matrix[12],
+    matrix[1] * point[0] + matrix[5] * point[1] + matrix[9] * point[2] + matrix[13],
+    matrix[2] * point[0] + matrix[6] * point[1] + matrix[10] * point[2] + matrix[14],
+  ];
 }
 
 function geodeticToEcef(longitudeDegrees, latitudeDegrees, heightMeters) {
@@ -102,6 +110,23 @@ test('keeps a child tile transform relative to its parent origin', () => {
   assert.deepEqual([...result.tileTransform.slice(12, 15)], [37, 50, 50]);
   assert.deepEqual([...localOrigin], [6378137, 200, 300]);
   assert.deepEqual([...parentOrigin], [6378100, 150, 250]);
+});
+
+test('composes parent, child, and glTF Y-up transforms into the original ECEF position', () => {
+  const parentOrigin = new Float64Array([6378000, -1200000, 4300000]);
+  const childOrigin = new Float64Array([6378137.125, -1199980.25, 4300012.5]);
+  const reference = [6378137.3, -1199980.1, 4300012.8];
+  const child = encodeTileLocalPositions(view(reference), {
+    originEcef: childOrigin,
+    parentOriginEcef: parentOrigin,
+  });
+  const parentTransform = createTileTranslationTransform(parentOrigin);
+  const gltf = [child.positions[0], child.positions[1], child.positions[2]];
+  const ecefLocalAfterYUpRotation = [gltf[0], -gltf[2], gltf[1]];
+  const childWorld = transformPoint(child.tileTransform, ecefLocalAfterYUpRotation);
+  const world = transformPoint(parentTransform, childWorld);
+  const errorMeters = Math.hypot(...world.map((value, axis) => value - reference[axis]));
+  assert.ok(errorMeters <= 0.01, `composed world-coordinate error was ${errorMeters} m`);
 });
 
 test('reconstructs a shared boundary point consistently from adjacent tile origins', () => {

@@ -178,6 +178,43 @@ test('cancels a shared load only after its final request subscriber aborts', asy
   }
 });
 
+test('starts a fresh load when the previous request for the same URI is still settling after abort', async () => {
+  let reads = 0;
+  let startedResolve;
+  const started = new Promise((resolve) => { startedResolve = resolve; });
+  const provider = {
+    sourceIdentity: 'aborted-retry-fixture',
+    generation: 1,
+    getResource: (uri, signal) => {
+      reads += 1;
+      if (reads > 1) return Promise.resolve(bytes(`retry-${uri}`));
+      startedResolve();
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => {
+          setTimeout(() => reject(new DOMException('aborted', 'AbortError')), 25);
+        }, { once: true });
+      });
+    },
+  };
+  const server = createTileResourceServer(provider, { maxConcurrentLoads: 1, maxQueuedLoads: 1 });
+  const controller = new AbortController();
+  try {
+    const first = server.handle(req('/retry.glb', { signal: controller.signal }));
+    await started;
+    controller.abort();
+    await assert.rejects(first, { name: 'AbortError' });
+
+    const second = await server.handle(req('/retry.glb'));
+    assert.equal(second.status, 200);
+    assert.equal(await second.text(), 'retry-retry.glb');
+    assert.equal(reads, 2);
+    await delay(35);
+    assert.equal(server.getStats().inFlightLoads, 0);
+  } finally {
+    await server.close();
+  }
+});
+
 test('aborts provider work when the only subscriber cancels and invalidates old generations on switch', async () => {
   let providerSignal;
   let startedResolve;

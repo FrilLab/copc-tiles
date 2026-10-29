@@ -35,4 +35,8 @@ Validator, then places a metadata-bearing GLB in a tileset and runs the
 CesiumGS 3D Tiles Validator's extension-aware checks. The Khronos validator
 does not validate these extension semantics; the CesiumGS validator reports
 zero errors and warnings for the fixture. Cesium and Three.js runtime metadata
-inspection remains in T9/T10.
+inspection is covered by the browser fixtures. The actual one-node Autzen GLB
+also passed the Khronos validator, and Three.js read its RGB, intensity and
+classification data through the standard GLB/metadata plugins. Extra Bytes
+were not present in the Adapter 0.6.0 request contract and are not claimed for
+the real source.

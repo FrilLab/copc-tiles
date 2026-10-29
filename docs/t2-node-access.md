@@ -90,36 +90,41 @@ compared with the public Adapter point view. Six Range requests transferred
 205,026 bytes. The public buffer preparation helper produced ECEF Float64
 coordinates; source CRS was retained as unverified WKT and vertical datum as
 unknown. The encoded 151,650-byte GLB passed Khronos validation with zero
-errors and warnings. A test-only one-node wrapper passed the CesiumGS validator.
+errors and warnings. Its test-only one-node wrapper passed the CesiumGS
+validator and was rendered in both browser consumers.
 
-This does not verify the full COPC hierarchy as a production tileset, nor
-Cesium/Three rendering of the real node. Actual preparation used the public
+This does not verify the full COPC hierarchy, on-demand COPC-to-resource
+generation, or production multi-node LOD. Actual preparation used the public
 `/cesium` entrypoint because a fused prepared-point method was not present in
 this backend instance. No Adapter internals were imported.
 
 ## Adapter issue #383 proposal
 
-The current connector does not justify changing Adapter. If maintainers want
-the remaining capabilities, the minimal public contract to review in
-[Adapter #383](https://github.com/mors119/copc-adapter/issues/383) is:
+The current integration is pinned to the only verified package release,
+`0.6.0`; Adapter PR #391 is open and cannot be used as a released contract. The
+minimal remaining public contract for full multi-node tiles is tracked in
+[Adapter #383](https://github.com/mors119/copc-adapter/issues/383):
 
-1. Add `AbortSignal` to hierarchy-page load options and propagate it into the
-   existing range request.
-2. Expose a read-only experimental E node result containing node key,
-   source/transform generation, interleaved ECEF Float64, prepared Float64
-   height, selected attributes, and optional already-retained Source or
-   Geographic buffers. Missing optional buffers must be explicit; no E
-   rehydration or ECEF inverse transform.
-3. Add named per-node extra-dimension selection with exact typed-array
-   semantics and explicit unsupported/missing-field results.
-4. Publish named hierarchy node/page/subtree types if maintainers intend those
-   shapes to be a supported connector contract. The current bridge infers
-   compatible shapes from public method signatures rather than deep imports.
-5. If callers need raw point-buffer fallback without an app callback, expose a
-   renderer-neutral public preparation function. No renderer-coupled helper is
-   imported by the Tiles engine in this implementation.
+1. Expose a transform-aware conservative ECEF bound for each undecoded
+   hierarchy cell, or a minimal adapter-owned operation to derive that bound
+   under the active horizontal/vertical transform. A bound over decoded points
+   cannot keep undiscovered descendants traversable.
+2. Attach stable source identity and transform generation to hierarchy pages,
+   node preparation and bound results, and reject stale results after source or
+   transform changes.
+3. Propagate `AbortSignal` through hierarchy page reads as well as point reads.
+4. Publish named hierarchy/node/page types and a renderer-neutral A prepared
+   node operation. These are needed for a stable packed connector; experimental
+   E buffers and named extra dimensions are optional for an initial A baseline.
 
 No Adapter files or issues are changed by this campaign.
+
+Adapter PR [#391](https://github.com/mors119/copc-adapter/pull/391) proposes a
+renderer-neutral `./core` node-source API, but it is not merged or published.
+The current connector remains pinned to the verified `0.6.0` public exports.
+The proposed API's decoded-point ECEF bounds do not supply conservative ECEF
+cell bounds for descendants that have not been read, so it does not by itself
+remove the production hierarchy/culling blocker.
 
 ## Evidence boundary
 

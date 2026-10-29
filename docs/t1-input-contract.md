@@ -32,17 +32,17 @@ integrated through a verified Adapter public API. Do not import its private
 implementation or infer optional Source storage from a `sourceCompatibility`
 property; that property is not part of the clarified E contract.
 
-The minimal upstream capability to propose separately is a public,
-renderer-neutral, read-only node point view returned by an explicit node read
-operation. It should expose `nodeKey`, source identity and transform
-generation, interleaved ECEF Float64 XYZ, prepared-height Float64, requested
-attributes, and optional Source/Geographic Float64 buffers only when those
-buffers are actually retained. The operation must not invoke the Direct
-`NodeSelector`, rehydrate E to `PreparedPointData`, or perform implicit
-re-decode / inverse transforms for unavailable optional buffers. It should
-return an explicit unavailable-capability result when a requested optional
-buffer is absent. This is an upstream Adapter issue/PR; no Adapter files are
-changed here.
+The remaining upstream contract is tracked in Adapter issue #383 and PR #391.
+An initial Tiles integration needs renderer-neutral prepared A node data with
+stable source/transform generation and CRS/height provenance, cancellation on
+hierarchy-page reads, and conservative transformed ECEF bounds for undecoded
+hierarchy cells. Bounds over decoded points cannot keep unread descendants
+traversable. E remains optional: if later exposed, its read-only node view may
+include interleaved ECEF Float64 XYZ, prepared-height Float64, requested
+attributes, and only already-retained Source/Geographic buffers. It must not
+invoke Direct `NodeSelector`, rehydrate E to `PreparedPointData`, or perform
+implicit re-decode / inverse transforms for unavailable optional buffers. No
+Adapter files are changed here.
 
 The public `CopcPointFieldSelection` supports position, RGB, intensity, and
 classification. `CopcPointAttributes` can represent named extra dimensions as

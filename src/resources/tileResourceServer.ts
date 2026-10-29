@@ -119,6 +119,7 @@ export function createTileResourceServer(
   let cacheBytes = 0;
   const cache = new Map<string, CacheEntry>();
   const inFlight = new Map<string, InFlightEntry>();
+  const outstandingLoads = new Set<InFlightEntry>();
   const loadGate = new LoadGate(limits.maxConcurrentLoads, limits.maxQueuedLoads);
 
   const current = (candidate: TileResourceProvider, generation: number): boolean => {
@@ -131,7 +132,7 @@ export function createTileResourceServer(
   };
 
   const clearGenerationState = (): void => {
-    for (const entry of inFlight.values()) entry.controller.abort();
+    for (const entry of outstandingLoads) entry.controller.abort();
     inFlight.clear();
     cache.clear();
     cacheBytes = 0;
@@ -221,8 +222,12 @@ export function createTileResourceServer(
     if (cached) return signal.aborted ? Promise.reject(abortError()) : Promise.resolve(cached);
 
     let entry = inFlight.get(key);
+    if (entry?.controller.signal.aborted) {
+      if (inFlight.get(key) === entry) inFlight.delete(key);
+      entry = undefined;
+    }
     if (!entry) {
-      if (inFlight.size >= limits.maxConcurrentLoads + limits.maxQueuedLoads) {
+      if (outstandingLoads.size >= limits.maxConcurrentLoads + limits.maxQueuedLoads) {
         return Promise.reject(new ResourceQueueFullError('The tile resource load queue is full.'));
       }
       const controller = new AbortController();
@@ -247,10 +252,12 @@ export function createTileResourceServer(
         return owned;
       }, controller.signal).finally(() => {
         created.settled = true;
+        outstandingLoads.delete(created);
         if (inFlight.get(key) === created) inFlight.delete(key);
       });
       entry = created;
       inFlight.set(key, created);
+      outstandingLoads.add(created);
     }
     return subscribe(entry, signal);
   };
@@ -321,7 +328,7 @@ export function createTileResourceServer(
     getStats: () => Object.freeze({
       cacheEntries: cache.size,
       cacheBytes,
-      inFlightLoads: inFlight.size,
+      inFlightLoads: outstandingLoads.size,
       queuedLoads: loadGate.queued,
       activeLoads: loadGate.active,
       closed,

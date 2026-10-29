@@ -26,6 +26,9 @@ export type CopcJsAdapterNodeSourceOptions = Readonly<
 export async function createCopcJsAdapterNodeSource(
   options: CopcJsAdapterNodeSourceOptions,
 ): Promise<CopcAdapterNodeSource> {
+  if (options.source.loadPreparedPointData) {
+    return new CopcAdapterNodeSource(options);
+  }
   if (typeof options.source.getMetadata !== 'function') {
     throw new CopcAdapterNodeSourceError(
       'PREPARATION_UNAVAILABLE',

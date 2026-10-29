@@ -37,5 +37,7 @@ shutdown or replacement.
 `npm run validate:resources` covers MIME types, URL addressing, HEAD/404/405,
 traversal and encoded paths, concurrent deduplication, LRU bounds, active
 cancellation, generation switching, queue saturation, response-size limits,
-and provider cleanup. Live browser loading through Cesium/Three is covered by
-T9/T10 and remains outstanding here.
+and provider cleanup. Cesium and Three also fetched the real one-node Autzen
+tileset and GLB through this URL handler. Those resources were encoded before
+the render test; real on-demand COPC node acquisition, subtree generation and
+renderer-driven source cancellation remain outstanding in T9/T10.

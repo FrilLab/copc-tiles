@@ -144,6 +144,13 @@ export class CopcAdapterNodeSource implements TileNodeSource {
       // Public Adapter 0.6.0 has no AbortSignal in hierarchy-page load options.
       const result = await this.#options.source.loadHierarchyPage(copyPage(page));
       this.#assertCurrent(operation.signal);
+      if (
+        !result || typeof result !== 'object' ||
+        !Array.isArray((result as { nodes?: unknown }).nodes) ||
+        !Array.isArray((result as { pages?: unknown }).pages)
+      ) {
+        return result as unknown as TileHierarchyPageResult;
+      }
       return Object.freeze({
         nodes: Object.freeze(result.nodes.map(copyNode)),
         pages: Object.freeze(result.pages.map(copyPage)),
@@ -295,11 +302,18 @@ function expectedFor(source: CopcAdapterNodeSource): Readonly<{
   return { sourceIdentity: source.sourceIdentity, transformGeneration: source.transformGeneration };
 }
 
-function copyPage(page: TileHierarchyPage): TileHierarchyPage {
-  return Object.freeze({ key: page.key, pageOffset: page.pageOffset, pageLength: page.pageLength });
+function copyPage(page: unknown): TileHierarchyPage {
+  if (!isRecord(page)) return page as TileHierarchyPage;
+  return Object.freeze({
+    key: page.key as string,
+    pageOffset: page.pageOffset as number,
+    pageLength: page.pageLength as number,
+  });
 }
 
-function copyNode(node: PublicCopcNode | TileHierarchyNode): PublicCopcNode {
+function copyNode(node: unknown): PublicCopcNode {
+  if (!isRecord(node)) return node as PublicCopcNode;
+  const children = node.children;
   return Object.freeze({
     key: node.key,
     level: node.level,
@@ -309,9 +323,15 @@ function copyNode(node: PublicCopcNode | TileHierarchyNode): PublicCopcNode {
     pointCount: node.pointCount,
     pointDataOffset: node.pointDataOffset,
     pointDataLength: node.pointDataLength,
-    ...(node.children === undefined ? {} : { children: [...node.children] }),
+    ...(children === undefined ? {} : {
+      children: Array.isArray(children) ? [...children] : children,
+    }),
     ...(node.childrenComplete === undefined ? {} : { childrenComplete: node.childrenComplete }),
-  });
+  } as PublicCopcNode);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function combineSignals(

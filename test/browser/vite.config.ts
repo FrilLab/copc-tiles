@@ -10,6 +10,7 @@ const providerReads: string[] = [];
 const copcRequests: Array<Readonly<{ method: string; range?: string }>> = [];
 let copcRangeBytes = 0;
 let copcRangeCount = 0;
+let fixtureGeneration = 1;
 const realCopcPath = process.env.COPC_TILES_AUTZEN;
 const browserPort = Number(process.env.COPC_TILES_BROWSER_PORT ?? 4173);
 const browserOrigin = `http://127.0.0.1:${browserPort}`;
@@ -30,9 +31,9 @@ const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.glsl': 'text/plain; charset=utf-8',
 });
 
-const provider: TileResourceProvider = Object.freeze({
+const createFixtureProvider = (generation: number): TileResourceProvider => Object.freeze({
   sourceIdentity: 'browser-fixture-source',
-  generation: 1,
+  generation,
   getResource: async (uri: string, signal: AbortSignal) => {
     providerReads.push(uri);
     if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -40,7 +41,7 @@ const provider: TileResourceProvider = Object.freeze({
     return bytes === undefined ? undefined : bytes.slice();
   },
 });
-const resourceServer = createTileResourceServer(provider, {
+let resourceServer = createTileResourceServer(createFixtureProvider(fixtureGeneration), {
   basePath: '/fixture/',
   maxResourceBytes: 4 * 1024 * 1024,
   maxCacheBytes: 4 * 1024 * 1024,
@@ -57,6 +58,8 @@ function browserResourcesPlugin(): Plugin {
         const pathname = new URL(rawUrl, browserOrigin).pathname;
         if (pathname === '/__stats') {
           if (new URL(rawUrl, browserOrigin).searchParams.has('reset')) {
+            fixtureGeneration += 1;
+            await resourceServer.switchSource(createFixtureProvider(fixtureGeneration));
             httpRequests.length = 0;
             providerReads.length = 0;
             copcRequests.length = 0;
@@ -72,6 +75,37 @@ function browserResourcesPlugin(): Plugin {
             copcRangeCount,
             cache: resourceServer.getStats(),
           }));
+          return;
+        }
+        if (pathname === '/__autzen/upload' && request.method === 'POST') {
+          const chunks: Buffer[] = [];
+          let requestBytes = 0;
+          for await (const chunk of request) {
+            const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            requestBytes += bytes.byteLength;
+            if (requestBytes > 4 * 1024 * 1024) {
+              response.statusCode = 413;
+              response.end('Autzen test resources exceed 4 MiB.');
+              return;
+            }
+            chunks.push(bytes);
+          }
+          try {
+            const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+              tileset?: unknown;
+              glbBase64?: unknown;
+            };
+            if (!payload.tileset || typeof payload.glbBase64 !== 'string' || payload.glbBase64.length > 3 * 1024 * 1024) {
+              throw new Error('Invalid one-node Autzen test resource payload.');
+            }
+            resourceMap.set('autzen/tileset.json', new TextEncoder().encode(JSON.stringify(payload.tileset)));
+            resourceMap.set('autzen/content/real.glb', new Uint8Array(Buffer.from(payload.glbBase64, 'base64')));
+            response.statusCode = 204;
+            response.end();
+          } catch (error) {
+            response.statusCode = 400;
+            response.end(error instanceof Error ? error.message : String(error));
+          }
           return;
         }
         if (pathname.startsWith('/fixture/')) {
