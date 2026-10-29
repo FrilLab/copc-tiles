@@ -18,38 +18,79 @@ function toBase64(bytes) {
   return btoa(binary);
 }
 
-window.startRealAdapterIntegration = async () => {
+window.startRealAdapterIntegration = async (options = {}) => {
   const integrationStartedAt = performance.now();
+  const sourceUrl = options.url ?? '/__copc/autzen.copc.laz';
+  const sourceIdentity = options.sourceIdentity ?? 'autzen-sha256-db2d56cdfa058bffccdc5d6019dae2fc9c6a551df10a5523c06c76a3e25a27fa';
+  const rangeValidation = options.rangeValidation ?? 'strict';
+  const requestedSourceUrl = new URL(sourceUrl, window.location.href);
+  const nativeFetch = window.fetch.bind(window);
+  const sourceRequests = [];
+  window.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const response = await nativeFetch(input, init);
+    const requestUrl = new URL(request.url);
+    sourceRequests.push({
+      isCopcSource: requestUrl.origin === requestedSourceUrl.origin && requestUrl.pathname === requestedSourceUrl.pathname,
+      method: request.method,
+      range: request.headers.get('Range'),
+      status: response.status,
+      contentLength: response.headers.get('Content-Length'),
+      contentRange: response.headers.get('Content-Range'),
+    });
+    return response;
+  };
   let stageStartedAt = performance.now();
-  const source = await copcJsBackend.open('/__copc/autzen.copc.laz', {
-    rangeValidation: 'strict',
-    maxRangeBytes: MAX_NODE_BYTES,
-    maxConcurrentRangeRequests: 2,
-  });
-  const sourceOpenMilliseconds = performance.now() - stageStartedAt;
+  let source;
   let connector;
   try {
+    source = await copcJsBackend.open(sourceUrl, {
+      rangeValidation,
+      maxRangeBytes: MAX_NODE_BYTES,
+      maxConcurrentRangeRequests: 2,
+    });
+    const sourceOpenMilliseconds = performance.now() - stageStartedAt;
     const metadata = source.getMetadata();
     const fields = createCopcPointFieldSelection(['position', 'rgb', 'intensity', 'classification']);
     const queue = [source.getRootHierarchyPage()];
     stageStartedAt = performance.now();
     const seenPages = new Set();
-    let node;
+    const requestedNodeCount = options.nodeCount ?? 1;
+    if (!Number.isSafeInteger(requestedNodeCount) || requestedNodeCount < 1 || requestedNodeCount > 8) {
+      throw new Error('nodeCount must be an integer between 1 and 8.');
+    }
+    const selectedNodes = [];
+    const selectedLevels = new Set();
     let hierarchyPagesRead = 0;
-    while (queue.length > 0 && hierarchyPagesRead < 64 && !node) {
+    let hierarchyNodeCount = 0;
+    let hierarchyChildPageRefs = 0;
+    const hierarchyLevelCounts = {};
+    const maxHierarchyPages = options.maxHierarchyPages ?? 64;
+    while (queue.length > 0 && hierarchyPagesRead < maxHierarchyPages && selectedNodes.length < requestedNodeCount) {
       const page = queue.shift();
       if (!page || seenPages.has(page.key)) continue;
       seenPages.add(page.key);
       hierarchyPagesRead += 1;
       const result = await source.loadHierarchyPage(page);
-      node = result.nodes.find((candidate) => (
+      hierarchyNodeCount += result.nodes.length;
+      hierarchyChildPageRefs += result.pages.length;
+      for (const item of result.nodes) hierarchyLevelCounts[item.level] = (hierarchyLevelCounts[item.level] ?? 0) + 1;
+      const candidates = result.nodes.filter((candidate) => (
         candidate.pointCount > 0 && candidate.pointCount <= MAX_NODE_POINTS &&
         candidate.pointDataLength > 0 && candidate.pointDataLength <= MAX_NODE_BYTES
-      ));
-      if (!node) queue.push(...result.pages);
+      )).sort((a, b) => a.level - b.level || a.key.localeCompare(b.key));
+      for (const candidate of candidates) {
+        if (selectedNodes.length >= requestedNodeCount) break;
+        if (options.distinctLevels && selectedLevels.has(candidate.level)) continue;
+        if (selectedNodes.some((selected) => selected.key === candidate.key)) continue;
+        selectedNodes.push(candidate);
+        selectedLevels.add(candidate.level);
+      }
+      if (selectedNodes.length < requestedNodeCount) queue.push(...result.pages);
     }
     const hierarchyMilliseconds = performance.now() - stageStartedAt;
-    if (!node) throw new Error('No non-empty bounded Autzen node was found within 64 hierarchy pages.');
+    if (selectedNodes.length < requestedNodeCount) throw new Error(`Found ${selectedNodes.length} of ${requestedNodeCount} requested non-empty bounded nodes within ${maxHierarchyPages} hierarchy pages.`);
+    const node = selectedNodes[0];
 
     stageStartedAt = performance.now();
     const availableView = await source.loadPointDataView(node, fields);
@@ -73,7 +114,7 @@ window.startRealAdapterIntegration = async () => {
       : { status: 'unknown', reason: 'The Adapter public metadata did not provide a WKT definition.' };
     connector = await createCopcJsAdapterNodeSource({
       source,
-      sourceIdentity: 'autzen-sha256-db2d56cdfa058bffccdc5d6019dae2fc9c6a551df10a5523c06c76a3e25a27fa',
+      sourceIdentity,
       transformGeneration: 1,
       provenanceForNode: () => ({
         sourceCrs,
@@ -83,19 +124,19 @@ window.startRealAdapterIntegration = async () => {
       ownsSource: false,
     });
     const reader = new TileNodeReader(connector, {
-      maxHierarchyPages: 64,
+      maxHierarchyPages,
       maxHierarchyNodes: 50_000,
-      maxRequestedNodes: 1,
+      maxRequestedNodes: requestedNodeCount,
       maxPointsPerNode: MAX_NODE_POINTS,
-      maxTotalPoints: MAX_NODE_POINTS,
+      maxTotalPoints: MAX_NODE_POINTS * requestedNodeCount,
       maxPointDataBytesPerNode: MAX_NODE_BYTES,
-      maxTotalPointDataBytes: MAX_NODE_BYTES,
+      maxTotalPointDataBytes: MAX_NODE_BYTES * requestedNodeCount,
       maxDecodedBytesPerNode: 4 * 1024 * 1024,
-      maxTotalDecodedBytes: 4 * 1024 * 1024,
+      maxTotalDecodedBytes: 4 * 1024 * 1024 * requestedNodeCount,
       maxConcurrentNodeReads: 1,
     });
     stageStartedAt = performance.now();
-    const views = await reader.readNodes([node.key], {
+    const views = await reader.readNodes(selectedNodes.map((selected) => selected.key), {
       coordinates: {},
       attributes: attributeSelection,
     });
@@ -106,6 +147,21 @@ window.startRealAdapterIntegration = async () => {
     const encoded = encodePointCloudGlb(view);
     const glbEncodingMilliseconds = performance.now() - stageStartedAt;
     if (!encoded) throw new Error('The actual non-empty COPC node encoded to no GLB content.');
+    const multiNodeSummary = selectedNodes.map((selected) => {
+      const selectedView = views.get(selected.key);
+      const selectedGlb = selected.key === node.key ? encoded : selectedView ? encodePointCloudGlb(selectedView) : undefined;
+      return {
+        nodeKey: selected.key,
+        level: selected.level,
+        parentKey: selected.level === 0 ? null : `${selected.level - 1}-${Math.floor(selected.x / 2)}-${Math.floor(selected.y / 2)}-${Math.floor(selected.z / 2)}`,
+        declaredChildren: selected.children ?? [],
+        hierarchyPointCount: selected.pointCount,
+        loadedPointCount: selectedView?.pointCount ?? null,
+        encodedPointCount: selectedGlb?.pointCount ?? null,
+        identityMatches: selectedView?.context.nodeKey === selected.key,
+        glbBytes: selectedGlb?.bytes.byteLength ?? null,
+      };
+    });
     const origin = encoded.originEcef;
     const halfExtents = [0, 0, 0];
     for (let index = 0; index < view.ecef.length; index += 3) {
@@ -146,6 +202,7 @@ window.startRealAdapterIntegration = async () => {
     const base64ConversionMilliseconds = performance.now() - stageStartedAt;
     return {
       adapterVersion: '0.6.0',
+      sourceRequests,
       pipelineTimingsMilliseconds: {
         sourceOpen: sourceOpenMilliseconds,
         hierarchyDiscovery: hierarchyMilliseconds,
@@ -174,6 +231,10 @@ window.startRealAdapterIntegration = async () => {
       sourceCrsStatus: view.context.sourceCrs.status,
       verticalDatumStatus: view.context.verticalDatum.status,
       hierarchyPagesRead,
+      hierarchyNodeCount,
+      hierarchyChildPageRefs,
+      hierarchyLevelCounts,
+      multiNodeSummary,
       encodedPointCount: encoded.pointCount,
       encodedMetadataProperties: encoded.metadataProperties,
       originEcef: origin,
@@ -183,8 +244,12 @@ window.startRealAdapterIntegration = async () => {
       tileset,
       glbBase64,
     };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown Adapter integration error.';
+    throw new Error(message.replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted URL]'));
   } finally {
     connector?.close();
-    source.destroy?.();
+    source?.destroy?.();
+    window.fetch = nativeFetch;
   }
 };

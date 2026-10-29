@@ -32,7 +32,9 @@ integrated through a verified Adapter public API. Do not import its private
 implementation or infer optional Source storage from a `sourceCompatibility`
 property; that property is not part of the clarified E contract.
 
-The remaining upstream contract is tracked in Adapter issue #383 and PR #391.
+The remaining upstream contract is tracked in Adapter issue #383. PR #391 is
+merged in upstream source but its API has not been published in a package; it
+does not supply conservative transformed bounds for undecoded source cells.
 An initial Tiles integration needs renderer-neutral prepared A node data with
 stable source/transform generation and CRS/height provenance, cancellation on
 hierarchy-page reads, and conservative transformed ECEF bounds for undecoded
