@@ -25,10 +25,12 @@ bounds from the Adapter, transform source-CRS bounds, or claim that fixture
 bounds came from a COPC file. Adapter 0.6.0 does not expose the complete
 public per-node ECEF-bound/provenance contract required for that integration;
 the gap is tracked in Adapter [issue #383](https://github.com/mors119/copc-adapter/issues/383).
-Adapter [PR #391](https://github.com/mors119/copc-adapter/pull/391) is open and
-proposes bounds over decoded point content, not a transformed conservative
-bound for an undecoded COPC cell. Such point bounds cannot stand in for a
-parent volume that must keep undiscovered descendants traversable.
+Adapter [PR #391](https://github.com/mors119/copc-adapter/pull/391) is merged
+in upstream source but is not in the published 0.6.0 package. Its available
+source-cell bounds are expressed in COPC CRS, and bounds over decoded points do
+not establish a transformed conservative bound for an undecoded cell. Neither
+can stand in for a parent ECEF volume that must keep undiscovered descendants
+traversable without a reviewed transform-aware bound contract.
 
 Fixture verification:
 

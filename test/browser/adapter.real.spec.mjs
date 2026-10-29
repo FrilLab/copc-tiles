@@ -135,4 +135,11 @@ test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Ce
   assert.equal(threeDispose.groupDetached, true);
 
   console.log(`Real one-node Autzen rendering: Cesium ${cesium.visiblePoints} visible points, ${cesium.pixels.nonBlackPixels}/${cesium.movedPixels.nonBlackPixels} initial/moved rendered pixels at ${cesium.longitudeDegrees.toFixed(6)},${cesium.latitudeDegrees.toFixed(6)}, browser load/render=${cesium.renderMilliseconds.toFixed(1)} ms; Three ${three.pointCount} points, ${three.initialPixels.nonBlackPixels}/${three.movedPixels.nonBlackPixels} initial/moved rendered pixels, browser load/render=${three.renderMilliseconds.toFixed(1)} ms; bounds-center/first-point world error=${maxBoundsCenterErrorMeters.toFixed(4)}/${positionErrorMeters.toFixed(4)} m; encoder error=${result.maxAbsoluteErrorMeters.toFixed(4)} m; cached resources=${cesium.resources.cache.cacheBytes} bytes.`);
+  console.log(JSON.stringify({
+    autzenPrecisionMeters: {
+      maxBoundsCenterError: maxBoundsCenterErrorMeters,
+      firstPointWorldError: positionErrorMeters,
+      encoderMaxAbsoluteError: result.maxAbsoluteErrorMeters,
+    },
+  }));
 });

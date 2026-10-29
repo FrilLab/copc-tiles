@@ -2,17 +2,22 @@
 
 **COPC → standard 3D Tiles 1.1** as a standalone, optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter).
 
-> **Status: 0.1.0 maintainer review candidate; not published.** The standalone engine, fixture-based Cesium/Three integrations, official validator checks, and a real one-node Autzen path rendered by both Cesium and Three are implemented. The test pre-generates one bounded node; full on-demand COPC hierarchy/LOD remains blocked by missing public Adapter bounds, transform provenance and hierarchy cancellation APIs. See [`docs/implementation-status.md`](docs/implementation-status.md).
+> **Status: 0.1.0 conditional review candidate; not published.** The engine, fixture validators, package-isolation checks, and bounded real Autzen and SoFi node checks pass. SoFi hierarchy metadata resolved three nodes at levels 2–4, and both Cesium and Three rendered the same real primary-node GLB. The renderer tests use a prebuilt one-node wrapper; full on-demand COPC hierarchy/LOD remains blocked by the current published Adapter contract. See [`docs/implementation-status.md`](docs/implementation-status.md) and the [full release audit](docs/release-audit-2026-10-29.md).
 
 ## Why separate?
 
 COPC Adapter streams COPC points directly with CesiumJS and Three.js. COPC Tiles is an independent integration path for clients that require **standards-compliant 3D Tiles**. Projects using only the direct adapter must not pay a Tiles runtime, dependency, or install-size cost.
 
 - Package candidate: `@frillab/copc-tiles@0.1.0` (not published).
-- This standalone repository is the current development boundary; the later
-  distribution choice between an Adapter `/tiles` subpath and a separately
-  published `@frillab/copc-tiles` package remains open until packed footprint,
-  runtime graph, compatibility, and release overhead are compared.
+- This standalone repository is the current development boundary. The packed
+  candidate is 73,876 compressed / 275,582 unpacked bytes and installs to
+  364 KiB in a clean Tiles-only consumer; measurements are in the
+  [benchmark report](docs/benchmark-report-2026-10-29.md).
+  The measured package and migration
+  comparison recommends keeping Tiles separately distributed even if the
+  source later shares an Adapter monorepo; maintainers still own the final
+  distribution decision. See
+  [`docs/adapter-migration-assessment.md`](docs/adapter-migration-assessment.md).
 - Adapter package: `@frillab/copc-adapter` ([upstream repository](https://github.com/mors119/copc-adapter)).
 - Dependency direction: **copc-tiles → copc-adapter**, never the reverse.
 - Reuse approved, stable, *public* adapter APIs for COPC hierarchy/Range/decode/CRS and read-only point data. Do not import upstream private `packages/core/**` files.
@@ -66,18 +71,26 @@ real COPC evidence are reported separately in the implementation status.
 | T12 | [#12](https://github.com/FrilLab/copc-tiles/issues/12) | A/E and Direct/Tiles performance, bundle isolation, release readiness | T9–T11 |
 
 The public source contract and package usage are documented in
-[`docs/usage.md`](docs/usage.md). See [`docs/implementation-status.md`](docs/implementation-status.md)
-for milestone progress, exact commands, Adapter compatibility, limitations,
-and release classification.
+[`docs/usage.md`](docs/usage.md). See the [Adapter API compatibility
+matrix](docs/adapter-api-compatibility.md), [issue-by-issue acceptance
+audit](docs/release-audit-2026-10-29.md), and
+[`docs/implementation-status.md`](docs/implementation-status.md) for exact
+commands, source evidence, limitations and release classification.
 
 ## Compatibility and release gates
 
 1. Pin a verified compatible adapter version/range; validate against actual packed consumers, not arbitrary local private source aliases.
 2. Maintain explicit compatibility and feature matrices for A/default vs experimental E, copc-js vs Rust/WASM, HTTP vs local File, Cesium vs Three.
-3. Validate position/height precision (including datums, offsets, polar/dateline cases), attribute preservation, cancellation, source identity, malformed inputs and memory bounds.
+3. Validate position/height precision (including datums, offsets, polar/dateline cases), attribute preservation, cancellation, source identity, malformed inputs and memory bounds. The current real-source test records encoder errors of about 2–4 micrometers against Adapter-prepared ECEF, but source CRS and vertical reference remain unverified.
 4. Run real standard Cesium and Three.js rendering and official glTF / 3D Tiles validators before claiming compatibility.
 5. Measure clean Direct COPC bundle and **npm install** footprint without Tiles; tree shaking is not sufficient proof of install-size isolation.
 6. Do not publish, deploy or claim full T12 completion before maintainer review and required passing gates.
+
+The tested integration versions are Adapter `0.6.0`, CesiumJS `1.146.0`,
+Three.js `0.186.1`, `3d-tiles-renderer` `0.5.3`, and Chromium
+`156.0.8078.4`. These are tested points, not declared broad renderer/browser
+compatibility ranges. The published Adapter 0.6.0 does not include the
+renderer-neutral `/core` API merged in upstream PR #391.
 
 ## Development policy
 
@@ -85,11 +98,11 @@ See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
 **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README
 is the public architecture and implementation roadmap.
 
-The packed Tiles engine runtime targets Node `>=18`. The repository test and
-browser toolchain was verified on Node `22.23.4`. On this machine, Node
-`26.12.1` could not compile the development-only `better-sqlite3@11.10.0`
-dependency, so use Node 22 for development until that toolchain is verified on
-a newer major.
+The packed Tiles engine runtime targets Node `>=18`. Unit tests pass on Node
+`18.20.8`, `22.23.4`, and `26.12.1`; typecheck/build passed on Node 18 and 26.
+The clean development install on Node 26 remains blocked by the
+development-only `better-sqlite3@11.10.0` validator dependency. Browser
+verification has been run on Chromium only; Firefox and WebKit are unverified.
 
 ## Original planning history
 

@@ -72,7 +72,7 @@ those arrays.
 | Avoid duplicate requests | Duplicate requested keys in a batch are collapsed; exact fixture point-call count is one per unique key. Cross-call concurrent deduplication is a T8 resource-provider concern. |
 | Prepared and buffer/view outputs | Public fused reads are preferred; `createCopcJsAdapterNodeSource` provides a dynamic public-helper fallback. Real `copcJsBackend` output was tested with Autzen; Rust backend remains untested. |
 | Cancellation and generations | Point reads receive a composed `AbortSignal`; source/transform generation is checked before and after awaits. Adapter hierarchy page reads cannot be aborted in flight. |
-| Damaged Range and malformed hierarchy | Errors propagate without retry; malformed/unsafe hierarchy ranges fail before node data reads. The real Autzen check used a local bounded HTTP Range endpoint and confirmed six requests / 205,026 bytes rather than downloading the 81,123,042-byte object. |
+| Damaged Range and malformed hierarchy | Errors propagate without retry; malformed/unsafe hierarchy ranges fail before node data reads. The current Autzen check used a local bounded HTTP Range endpoint and confirmed six requests / 164,880 bytes rather than downloading the 81,123,042-byte object. |
 
 ## Real Autzen evidence
 
@@ -83,13 +83,13 @@ public Autzen sample (`https://s3.amazonaws.com/hobu-lidar/autzen-classified.cop
 local HTTP Range responses. To rerun the browser check, provide the verified
 file path with `COPC_TILES_AUTZEN=/path/to/autzen-classified.copc.laz`.
 The Tiles reader
-resolved hierarchy pages and requested node `5-8-6-0` (6,529 points) under
+resolved hierarchy pages and requested node `4-11-2-0` (5,122 points) under
 the configured 8,192-point / 2 MiB point-data limits. Available fields were
 `position`, `rgb`, `intensity`, and `classification`; returned samples were
 compared with the public Adapter point view. Six Range requests transferred
-205,026 bytes. The public buffer preparation helper produced ECEF Float64
+164,880 bytes. The public buffer preparation helper produced ECEF Float64
 coordinates; source CRS was retained as unverified WKT and vertical datum as
-unknown. The encoded 151,650-byte GLB passed Khronos validation with zero
+unknown. The encoded 119,292-byte GLB passed Khronos validation with zero
 errors and warnings. Its test-only one-node wrapper passed the CesiumGS
 validator and was rendered in both browser consumers.
 
@@ -101,7 +101,8 @@ this backend instance. No Adapter internals were imported.
 ## Adapter issue #383 proposal
 
 The current integration is pinned to the only verified package release,
-`0.6.0`; Adapter PR #391 is open and cannot be used as a released contract. The
+`0.6.0`; merged Adapter PR #391 has not been published and cannot be used as a
+released contract. The
 minimal remaining public contract for full multi-node tiles is tracked in
 [Adapter #383](https://github.com/mors119/copc-adapter/issues/383):
 
