@@ -87,6 +87,13 @@ test('builds conservative explicit tileset geometry from hierarchy metadata only
 test('requires complete child discovery and a unique connected octree', () => {
   assertTilesetError('INCOMPLETE_HIERARCHY', () => createExplicitTileset([
     { node: { ...rootNode, childrenComplete: false }, bounds: rootBounds },
+    ...inputs.slice(1),
+  ]));
+  const rootWithoutCompleteness = { ...rootNode };
+  delete rootWithoutCompleteness.childrenComplete;
+  assertTilesetError('INCOMPLETE_HIERARCHY', () => createExplicitTileset([
+    { node: rootWithoutCompleteness, bounds: rootBounds },
+    ...inputs.slice(1),
   ]));
   assertTilesetError('INCOMPLETE_HIERARCHY', () => createExplicitTileset([
     { node: { ...rootNode, children: ['missing'] }, bounds: rootBounds },

@@ -208,7 +208,7 @@ function validateHierarchyNode(value: unknown): TileHierarchyNode {
     pointDataOffset: pointDataOffset as number,
     pointDataLength: pointDataLength as number,
     ...(children === undefined ? {} : { children: Object.freeze([...(children as string[])]) }),
-    childrenComplete: true,
+    ...(childrenComplete === undefined ? {} : { childrenComplete }),
   });
 }
 

@@ -44,3 +44,6 @@ The public Adapter does not currently provide the conservative per-node ECEF
 bounds and transform generation needed to establish those cells. No real COPC
 octree is claimed; the required public capability is tracked in Adapter
 [issue #383](https://github.com/mors119/copc-adapter/issues/383).
+Adapter [PR #391](https://github.com/mors119/copc-adapter/pull/391) is still
+open; its decoded-point bounds cannot establish culling bounds for undecoded
+descendants.

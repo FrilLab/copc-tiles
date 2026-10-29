@@ -53,9 +53,10 @@ const context = Object.freeze({
 });
 const expected = { sourceIdentity: context.sourceIdentity, transformGeneration: context.transformGeneration };
 const selection = {
+  coordinates: { preparedHeight: true },
   attributes: { rgb: true, intensity: true, classification: true },
 };
-const selectionA = { ...selection, coordinates: { source: true, geographic: true } };
+const selectionA = { ...selection, coordinates: {} };
 const attributes = { red, green, blue, intensity, classification };
 const aInput = {
   pointCount,
@@ -83,6 +84,14 @@ const timings = {
   createEView: await measure(() => createExperimentalETilePointView(eInput, context, expected, selection), 25),
   encodeAView: await measure(() => encodePointCloudGlb(aView), 7),
   encodeEView: await measure(() => encodePointCloudGlb(eView), 7),
+  prepareEncodeA: await measure(() => {
+    const view = createTilePointViewFromA(aInput, context, expected, selectionA);
+    return encodePointCloudGlb(view);
+  }, 7),
+  prepareEncodeE: await measure(() => {
+    const view = createExperimentalETilePointView(eInput, context, expected, selection);
+    return encodePointCloudGlb(view);
+  }, 7),
 };
 const cancellationReader = new TileNodeReader({
   sourceIdentity: 'benchmark-cancellation-v1',
@@ -124,6 +133,7 @@ if (warmProviderReads !== 1 || resourceStats.cacheEntries !== 1 || cold.provider
 globalThis.gc?.();
 const memory = process.memoryUsage();
 const coordinateInputBytes = ecef.byteLength + preparedHeight.byteLength;
+const coordinateInputBytesA = ecef.byteLength + sourceCoordinates.byteLength + geographic.byteLength;
 const attributeInputBytes = red.byteLength + green.byteLength + blue.byteLength + intensity.byteLength + classification.byteLength;
 
 console.log(JSON.stringify({
@@ -133,15 +143,20 @@ console.log(JSON.stringify({
   glbBytes: encoded.bytes.byteLength,
   inputs: {
     coordinateBytesE: coordinateInputBytes,
-    coordinateBytesA: coordinateInputBytes + sourceCoordinates.byteLength + geographic.byteLength,
+    coordinateBytesA: coordinateInputBytesA,
     selectedAttributeBytes: attributeInputBytes,
-    note: 'ArrayBuffer totals cover retained benchmark inputs, not transient encoder allocations.'
+    aViewRetainedTypedArrayBytes: retainedViewBytes(aView),
+    eViewRetainedTypedArrayBytes: retainedViewBytes(eView),
+    glbRetainedOutputBytes: encoded.bytes.byteLength,
+    note: 'Views alias prepared inputs; the GLB output byte count is retained allocation. Temporary encoder allocations and source preparation/decoding are not included.'
   },
   timingsMilliseconds: {
     aViewConstruction: timings.createAView,
     eViewConstruction: timings.createEView,
     aGlbEncoding: timings.encodeAView,
     eGlbEncoding: timings.encodeEView,
+    aPrepareAndEncode: timings.prepareEncodeA,
+    ePrepareAndEncode: timings.prepareEncodeE,
     preAbortedReadDetection: timings.preAbortedReadDetection,
     resourceColdRequest: cold.timings,
     resourceWarmRequest: warm,
@@ -206,6 +221,25 @@ async function measureColdRequests(count) {
 
 function round(value) {
   return Number(value.toFixed(3));
+}
+
+function retainedViewBytes(view) {
+  const buffers = new Set();
+  const add = (value) => {
+    if (ArrayBuffer.isView(value)) buffers.add(value.buffer);
+  };
+  add(view.ecef);
+  add(view.preparedHeight);
+  add(view.source);
+  add(view.geographic);
+  for (const values of Object.values(view.attributes ?? {})) {
+    if (values && typeof values === 'object' && !ArrayBuffer.isView(values)) {
+      for (const extra of Object.values(values)) add(extra);
+    } else {
+      add(values);
+    }
+  }
+  return [...buffers].reduce((sum, buffer) => sum + buffer.byteLength, 0);
 }
 
 function bytesEqual(left, right) {

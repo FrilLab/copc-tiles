@@ -2,13 +2,17 @@
 
 **COPC → standard 3D Tiles 1.1** as a standalone, optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter).
 
-> **Status: 0.1.0 maintainer review candidate; not published.** The standalone engine, fixture-based Cesium/Three integrations, official validator checks, and one bounded real COPC node path are implemented. Full real COPC hierarchy/rendering remains blocked by missing public Adapter bounds and provenance APIs. See [`docs/implementation-status.md`](docs/implementation-status.md).
+> **Status: 0.1.0 maintainer review candidate; not published.** The standalone engine, fixture-based Cesium/Three integrations, official validator checks, and a real one-node Autzen path rendered by both Cesium and Three are implemented. The test pre-generates one bounded node; full on-demand COPC hierarchy/LOD remains blocked by missing public Adapter bounds, transform provenance and hierarchy cancellation APIs. See [`docs/implementation-status.md`](docs/implementation-status.md).
 
 ## Why separate?
 
 COPC Adapter streams COPC points directly with CesiumJS and Three.js. COPC Tiles is an independent integration path for clients that require **standards-compliant 3D Tiles**. Projects using only the direct adapter must not pay a Tiles runtime, dependency, or install-size cost.
 
 - Package candidate: `@frillab/copc-tiles@0.1.0` (not published).
+- This standalone repository is the current development boundary; the later
+  distribution choice between an Adapter `/tiles` subpath and a separately
+  published `@frillab/copc-tiles` package remains open until packed footprint,
+  runtime graph, compatibility, and release overhead are compared.
 - Adapter package: `@frillab/copc-adapter` ([upstream repository](https://github.com/mors119/copc-adapter)).
 - Dependency direction: **copc-tiles → copc-adapter**, never the reverse.
 - Reuse approved, stable, *public* adapter APIs for COPC hierarchy/Range/decode/CRS and read-only point data. Do not import upstream private `packages/core/**` files.
@@ -80,6 +84,12 @@ and release classification.
 See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
 **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README
 is the public architecture and implementation roadmap.
+
+The packed Tiles engine runtime targets Node `>=18`. The repository test and
+browser toolchain was verified on Node `22.23.4`. On this machine, Node
+`26.12.1` could not compile the development-only `better-sqlite3@11.10.0`
+dependency, so use Node 22 for development until that toolchain is verified on
+a newer major.
 
 ## Original planning history
 

@@ -4,7 +4,6 @@ import {
 } from '@frillab/copc-adapter/cesium';
 import { encodePointCloudGlb } from '../../src/gltf/pointCloudGlb.ts';
 import { createCopcJsAdapterNodeSource } from '../../src/adapter/copcJsAdapter.ts';
-import { createTileTranslationTransform } from '../../src/geometry/tileLocalCoordinates.ts';
 import { TileNodeReader } from '../../src/source/tileNodeReader.ts';
 
 const MAX_NODE_POINTS = 8192;
@@ -20,16 +19,20 @@ function toBase64(bytes) {
 }
 
 window.startRealAdapterIntegration = async () => {
+  const integrationStartedAt = performance.now();
+  let stageStartedAt = performance.now();
   const source = await copcJsBackend.open('/__copc/autzen.copc.laz', {
     rangeValidation: 'strict',
     maxRangeBytes: MAX_NODE_BYTES,
     maxConcurrentRangeRequests: 2,
   });
+  const sourceOpenMilliseconds = performance.now() - stageStartedAt;
   let connector;
   try {
     const metadata = source.getMetadata();
     const fields = createCopcPointFieldSelection(['position', 'rgb', 'intensity', 'classification']);
     const queue = [source.getRootHierarchyPage()];
+    stageStartedAt = performance.now();
     const seenPages = new Set();
     let node;
     let hierarchyPagesRead = 0;
@@ -45,9 +48,12 @@ window.startRealAdapterIntegration = async () => {
       ));
       if (!node) queue.push(...result.pages);
     }
+    const hierarchyMilliseconds = performance.now() - stageStartedAt;
     if (!node) throw new Error('No non-empty bounded Autzen node was found within 64 hierarchy pages.');
 
+    stageStartedAt = performance.now();
     const availableView = await source.loadPointDataView(node, fields);
+    const publicViewMilliseconds = performance.now() - stageStartedAt;
     const availableFields = availableView.availableFields;
     if (!availableFields.has('position')) throw new Error('The actual COPC point view lacks positions.');
     const attributeSelection = {
@@ -88,43 +94,68 @@ window.startRealAdapterIntegration = async () => {
       maxTotalDecodedBytes: 4 * 1024 * 1024,
       maxConcurrentNodeReads: 1,
     });
+    stageStartedAt = performance.now();
     const views = await reader.readNodes([node.key], {
-      coordinates: { source: true, geographic: true },
+      coordinates: {},
       attributes: attributeSelection,
     });
+    const nodePreparationMilliseconds = performance.now() - stageStartedAt;
     const view = views.get(node.key);
     if (!view) throw new Error(`The Tiles connector returned no view for node ${node.key}.`);
+    stageStartedAt = performance.now();
     const encoded = encodePointCloudGlb(view);
+    const glbEncodingMilliseconds = performance.now() - stageStartedAt;
     if (!encoded) throw new Error('The actual non-empty COPC node encoded to no GLB content.');
-    const minimum = [Infinity, Infinity, Infinity];
-    const maximum = [-Infinity, -Infinity, -Infinity];
+    const origin = encoded.originEcef;
+    const halfExtents = [0, 0, 0];
     for (let index = 0; index < view.ecef.length; index += 3) {
       for (let axis = 0; axis < 3; axis += 1) {
-        minimum[axis] = Math.min(minimum[axis], view.ecef[index + axis]);
-        maximum[axis] = Math.max(maximum[axis], view.ecef[index + axis]);
+        const local = Math.abs(view.ecef[index + axis] - origin[axis]);
+        halfExtents[axis] = Math.max(halfExtents[axis], local);
       }
     }
-    const origin = minimum.map((value, axis) => value + (maximum[axis] - value) / 2);
-    const halfExtents = minimum.map((value, axis) => Math.max((maximum[axis] - value) / 2, 0.01));
+    for (let axis = 0; axis < 3; axis += 1) {
+      halfExtents[axis] = Math.max(halfExtents[axis] + encoded.maxAbsoluteErrorMeters, 0.01);
+    }
+    let pointsInsideBounds = true;
+    for (let index = 0; index < view.ecef.length; index += 3) {
+      for (let axis = 0; axis < 3; axis += 1) {
+        if (Math.abs(view.ecef[index + axis] - origin[axis]) > halfExtents[axis]) pointsInsideBounds = false;
+      }
+    }
     const box = [
       0, 0, 0,
       halfExtents[0], 0, 0,
       0, halfExtents[1], 0,
       0, 0, halfExtents[2],
     ];
+    const geometricError = Math.hypot(...halfExtents);
     const tileset = {
       asset: { version: '1.1' },
-      geometricError: 0,
+      geometricError,
       root: {
         boundingVolume: { box },
-        geometricError: 0,
+        geometricError,
         refine: 'ADD',
-        transform: [...createTileTranslationTransform(new Float64Array(origin))],
+        transform: [...encoded.tileTransform],
         content: { uri: 'content/real.glb', boundingVolume: { box: [...box] } },
       },
     };
+    stageStartedAt = performance.now();
+    const glbBase64 = toBase64(encoded.bytes);
+    const base64ConversionMilliseconds = performance.now() - stageStartedAt;
     return {
       adapterVersion: '0.6.0',
+      pipelineTimingsMilliseconds: {
+        sourceOpen: sourceOpenMilliseconds,
+        hierarchyDiscovery: hierarchyMilliseconds,
+        publicPointView: publicViewMilliseconds,
+        nodePreparation: nodePreparationMilliseconds,
+        glbEncoding: glbEncodingMilliseconds,
+        base64TransferConversion: base64ConversionMilliseconds,
+        sourceOpenThroughGlb: glbEncodingMilliseconds + nodePreparationMilliseconds + publicViewMilliseconds + hierarchyMilliseconds + sourceOpenMilliseconds,
+        totalThroughBase64: performance.now() - integrationStartedAt,
+      },
       metadataPointCount: metadata.pointCount,
       nodeKey: node.key,
       nodePointCount: node.pointCount,
@@ -147,8 +178,10 @@ window.startRealAdapterIntegration = async () => {
       encodedMetadataProperties: encoded.metadataProperties,
       originEcef: origin,
       halfExtents,
+      pointsInsideBounds,
+      maxAbsoluteErrorMeters: encoded.maxAbsoluteErrorMeters,
       tileset,
-      glbBase64: toBase64(encoded.bytes),
+      glbBase64,
     };
   } finally {
     connector?.close();

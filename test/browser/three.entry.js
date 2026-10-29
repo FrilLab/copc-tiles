@@ -55,7 +55,15 @@ function inspectModel(scene, url) {
     const position = point.geometry.getAttribute('position');
     firstPointWorld = new THREE.Vector3().fromBufferAttribute(position, 0).applyMatrix4(point.matrixWorld).toArray();
   }
-  return { url, points, colors, metadataProperties, firstMetadataRow, firstPointWorld };
+  return {
+    url,
+    points,
+    colors,
+    metadataProperties,
+    metadataPropertyNames: Object.keys(firstMetadataRow ?? {}),
+    firstMetadataRow,
+    firstPointWorld,
+  };
 }
 
 window.startThree = async () => {
@@ -130,6 +138,94 @@ window.startThree = async () => {
     modelLoadMilliseconds,
     allModelsLoadMilliseconds: allModelsLoadedAt - startedAt,
     postLoadRenderMilliseconds: firstRenderedFrameAt - allModelsLoadedAt,
+  };
+};
+
+window.startThreeUrl = async ({ tilesetUrl, originEcef, halfExtents }) => {
+  const startedAt = performance.now();
+  const canvas = document.getElementById('threeCanvas');
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  const target = new THREE.Vector3(...originEcef);
+  const radial = target.clone().normalize();
+  const east = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 0, 1), radial).normalize();
+  const distance = Math.max(Math.hypot(...halfExtents) * 4, 100);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.05, 100_000);
+  camera.position.copy(target).addScaledVector(radial, distance);
+  camera.up.set(0, 0, 1);
+  camera.lookAt(target);
+  camera.updateProjectionMatrix();
+  camera.updateMatrixWorld(true);
+
+  renderer = new THREE.WebGLRenderer({ canvas, alpha: false, antialias: false, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  renderer.setClearColor(0x000000, 1);
+
+  tiles = new TilesRenderer(tilesetUrl);
+  tiles.errorTarget = 0.5;
+  tiles.group.matrixAutoUpdate = true;
+  tiles.setCamera(camera);
+  tiles.setResolutionFromRenderer(camera, renderer);
+  const loader = new GLTFLoader(tiles.manager);
+  loader.register(() => new GLTFMeshFeaturesExtension());
+  loader.register(() => new GLTFStructuralMetadataExtension());
+  tiles.manager.addHandler(/\.(gltf|glb)$/i, loader);
+  scene.add(tiles.group);
+
+  const models = [];
+  const loadError = [];
+  const ready = new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('Three TilesRenderer did not load real Autzen points.')), 45_000);
+    tiles.addEventListener('load-model', (event) => {
+      models.push(inspectModel(event.scene, event.url));
+      if (models.some((model) => model.points > 0)) {
+        clearTimeout(timeout);
+        resolve();
+      }
+    });
+    tiles.addEventListener('load-error', (event) => {
+      loadError.push(event.error?.message ?? 'Three TilesRenderer load failed.');
+      clearTimeout(timeout);
+      reject(event.error ?? new Error(loadError.at(-1)));
+    });
+  });
+
+  const renderFrame = () => {
+    if (stopped) return;
+    camera.updateMatrixWorld();
+    tiles.update();
+    renderer.render(scene, camera);
+    animationFrame = requestAnimationFrame(renderFrame);
+  };
+  renderFrame();
+  await ready;
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  camera.updateMatrixWorld();
+  tiles.update();
+  renderer.render(scene, camera);
+  const initialPixels = readRenderedPixels(canvas, renderer.getContext());
+
+  const movedPosition = camera.position.clone().addScaledVector(east, distance * 0.2);
+  camera.position.copy(movedPosition);
+  camera.up.set(0, 0, 1);
+  camera.lookAt(target);
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  camera.updateMatrixWorld();
+  tiles.update();
+  renderer.render(scene, camera);
+  const movedPixels = readRenderedPixels(canvas, renderer.getContext());
+  const resources = await (await fetch('/__stats')).json();
+  const pointCount = models.reduce((sum, model) => sum + model.points, 0);
+  return {
+    models,
+    pointCount,
+    activeTiles: tiles.activeTiles.size,
+    loadError,
+    initialPixels,
+    movedPixels,
+    resources,
+    renderMilliseconds: performance.now() - startedAt,
   };
 };
 

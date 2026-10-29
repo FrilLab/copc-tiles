@@ -46,5 +46,5 @@ of unencoded inspection attributes, and deterministic output bytes.
 | Correct Float32 positions and transform | Consumes T3 output; no model transform is added. |
 | 16-bit LAS RGB display policy | Full normalized Uint16 channels, exact buffer round-trip, aligned stride. |
 | Empty, malformed, and bounded output | Empty nodes have no content; invalid buffers fail; point/output limits are enforced. |
-| Khronos validator | Two deterministic fixtures: zero errors and zero warnings. |
-| Compatible loader and real Autzen node | Not run yet. Cesium/Three browser integration and real COPC source are still outstanding; T4 remains partial. |
+| Khronos validator | Deterministic fixtures and actual Autzen GLB: zero errors and zero warnings. |
+| Compatible loader and real Autzen node | Cesium and Three fetched and rendered the same 151,650-byte GLB containing 6,529 points. This is one pre-generated node; full-source output remains outstanding, so T4 remains partial. |

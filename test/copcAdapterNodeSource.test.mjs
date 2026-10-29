@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createExperimentalETilePointView } from '../src/input/tilePointView.ts';
+import { createCopcJsAdapterNodeSource } from '../src/adapter/copcJsAdapter.ts';
 import {
   CopcAdapterNodeSource,
   CopcAdapterNodeSourceError,
@@ -130,6 +131,40 @@ test('runs requested-node traversal through the public Adapter bridge exactly on
   assert.deepEqual(pointCalls, [node.key]);
   assert.deepEqual([...views.keys()], [node.key]);
   assert.equal(views.get(node.key).ecef, prepared.world.coordinates);
+});
+
+test('reports malformed Adapter hierarchy results through the reader validator', async () => {
+  const malformedResult = new TileNodeReader(makeBridge(makeSource({
+    loadHierarchyPage: async () => ({ nodes: null, pages: [] }),
+  })));
+  await assert.rejects(
+    malformedResult.readNodes([node.key]),
+    (error) => error.code === 'INVALID_HIERARCHY_PAGE' && error.pageKey === 'root',
+  );
+
+  const malformedChildren = new TileNodeReader(makeBridge(makeSource({
+    loadHierarchyPage: async () => ({ nodes: [{ ...node, children: { invalid: true } }], pages: [] }),
+  })));
+  await assert.rejects(
+    malformedChildren.readNodes([node.key]),
+    (error) => error.code === 'INVALID_HIERARCHY_NODE' && error.nodeKey === node.key,
+  );
+});
+
+test('uses fused prepared data without requiring metadata or loading the Cesium fallback', async () => {
+  const prepared = preparedA();
+  const source = makeSource({
+    loadPreparedPointData: async () => prepared,
+  });
+  const bridge = await createCopcJsAdapterNodeSource({
+    source,
+    sourceIdentity: 'opaque-source-id',
+    transformGeneration: 5,
+    provenanceForNode: contextForNode,
+  });
+  const view = await bridge.loadNode(node, {});
+  assert.equal(view.ecef, prepared.world.coordinates);
+  bridge.close();
 });
 
 test('uses the public point-buffer fallback only with an explicit preparation callback', async () => {
