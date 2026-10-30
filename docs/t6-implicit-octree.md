@@ -40,11 +40,12 @@ Validator on a generated tileset with GLB content and binary subtrees.
 The encoding follows the [CesiumGS implicit tiling specification](https://github.com/CesiumGS/3d-tiles/blob/main/specification/ImplicitTiling/README.adoc)
 and its [availability indexing rules](https://github.com/CesiumGS/3d-tiles/blob/main/specification/ImplicitTiling/AVAILABILITY.adoc).
 
-The packed Adapter `/core` candidate provides hierarchy access, transform
-generation and ECEF bounds for decoded point content. It does not provide a
-conservative transformed ECEF bound for an undecoded cell, so no real COPC
-implicit octree is claimed. Tiles does not substitute decoded-point bounds or
-transformed cell corners for that contract. The real Autzen pipeline stops
-before emitting `tileset.json` or subtree availability. See the proposed
-[Adapter #383 cell-bound API](./adapter-383-bounds-followup.md) and the
-[versioned API matrix](./adapter-api-compatibility.md).
+The published Adapter 0.7.1 `/core` provides hierarchy access, transform
+generation, decoded-point bounds, and a separate conservative ECEF cell-bound
+result. The generated EPSG:4326 and EPSG:4979 fixtures return supported bounds;
+real Autzen EPSG:2992 returns `unsupported-horizontal-crs`, so this milestone
+does not claim a real COPC implicit octree. Tiles does not substitute
+decoded-point bounds or transformed cell corners. Live hierarchy-to-subtree
+availability and production real-data LOD remain incomplete. See the
+[Adapter API compatibility matrix](./adapter-api-compatibility.md) and
+[historical Adapter #383 proposal](./adapter-383-bounds-followup.md).

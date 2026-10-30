@@ -11,15 +11,15 @@ ECEF tile centers, red/green/blue rendered pixels, resource cache reuse, and
 
 The browser run uses headless Chromium with SwiftShader on the recorded
 development environment. It is deterministic renderer integration evidence,
-not a hardware GPU benchmark or real COPC hierarchy test. The latest default
-suite measured 1,328.3 ms to load the initial fixture tiles and 525.3 ms for
-the two frames after load at 640×480. Browser startup, cold fixture requests
-and SwiftShader are included; this timing is not a stable performance baseline.
+not a hardware GPU benchmark or real COPC hierarchy test. The 2026-10-30 full
+suite measured 641.6 ms to load initial fixture tiles and 392.2 ms for the two
+frames after load at 640×480. Browser startup, cold fixture requests and
+SwiftShader are included; this timing is not a stable performance baseline.
 
-## Real Adapter Core candidate
+## Real Adapter 0.7.1 Registry package
 
-The real-source test uses the packed Adapter `/core` candidate built from
-`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`. It opens the Autzen COPC, reads
+The real-source test installs the actual published Adapter 0.7.1 Registry
+package and imports its public `/core` export. It opens the Autzen COPC, reads
 node `4-11-2-0` (5,122 points), passes the returned A-shaped ECEF Float64
 buffers through the Tiles connector, and encodes a 119,292-byte GLB. Both
 `copc-js` and Rust/WASM passed the Chromium integration. The test validates the
@@ -32,10 +32,12 @@ error); first rendered point error was about 1.5 µm. Exact per-backend ranges,
 validator output and precision are in the [packed API matrix](./adapter-api-compatibility.md).
 The camera location was -123.062693°, 44.051994°; the 640×480 SwiftShader
 `copc-js` run counted 9,812 initial and 9,497 post-move non-background pixels.
-In the latest revalidation run, Cesium load/render measured 1,405.0 ms with
-`copc-js` and 1,343.4 ms with Rust/WASM. This is a single browser observation,
-not a stable latency distribution. The geographic position remains a broad
-area check, not an independent CRS or survey-reference validation.
+In the latest 2026-10-30 full browser run, Cesium load/render measured
+1,166.5 ms with `copc-js` and 1,086.3 ms with Rust/WASM. In the separately
+rerun integration command it measured 1,226.3 ms and 1,036.1 ms. These are individual browser
+observations, not a stable latency distribution. The geographic position
+remains a broad area check, not an independent CRS or survey-reference
+validation.
 
 The original test wrapper was culled because it declared `geometricError: 0`;
 Cesium treated the root as already meeting its screen-space target and issued
@@ -43,15 +45,16 @@ no content request. The wrapper now uses the measured decoded-node bounds and
 a non-zero root error, and uses the encoder's origin/transform. This is a
 meaningful one-node test wrapper, not a production COPC hierarchy. The test
 pre-generates the single node before Cesium starts. It does not establish
-on-demand node acquisition, multi-level hierarchy, conservative bounds for
-undecoded cells or production LOD. Adapter's returned ECEF bound is for
-decoded-point content only. Keep Adapter [issue #383](https://github.com/mors119/copc-adapter/issues/383)
-open for a released version and any reviewed transformed-cell-bound contract.
+on-demand node acquisition, multi-level hierarchy or production LOD. Adapter
+0.7.1 separately reports `unsupported-horizontal-crs` for the real Autzen
+EPSG:2992 source-cell bounds. No unsupported cell bound is replaced with the
+decoded-point content bound. See the [bounds/API evidence](./adapter-api-compatibility.md).
 
 ## Acceptance boundary
 
 Fixture and real one-node Autzen rendering pass in headless Chromium with
 SwiftShader. Multi-level COPC LOD, zoom-driven real node selection, comparison
 against Direct rendering, representative GPU performance, and source switching
-during a renderer request remain unverified. The candidate's strict NodeNext
-declarations also fail TS2834. T9 therefore remains partial.
+during a renderer request remain unverified. Strict packed NodeNext consumers
+now pass; projected multi-node bounds and live LOD remain the T9 blockers.
+T9 therefore remains partial.

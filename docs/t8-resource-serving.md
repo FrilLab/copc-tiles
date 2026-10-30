@@ -39,8 +39,10 @@ traversal and encoded paths, concurrent deduplication, LRU bounds, active
 cancellation, generation switching, queue saturation, response-size limits,
 and provider cleanup. Cesium and Three also fetched the real one-node Autzen
 tileset and GLB through this URL handler. Those resources were encoded before
-the render test. There is no live Core-backed tile provider yet: adding one
-before a conservative cell-bounds contract exists would produce invalid
-parent/child coverage. Real on-demand node acquisition, subtree generation,
-zoom-driven LOD, and renderer-driven source cancellation remain outstanding in
-T5/T6/T9/T10.
+the render test. There is no live Core-backed tile provider yet. Although
+Adapter 0.7.1 exposes conservative source-cell results, projected Autzen/SoFi
+results are explicitly unsupported and the hierarchy-to-tileset/resource
+route is not implemented. Tiles must preserve those results rather than use
+decoded-point bounds or guessed transforms. Real on-demand node acquisition,
+subtree generation, zoom-driven LOD, and renderer-driven source cancellation
+remain outstanding in T5/T6/T9/T10.

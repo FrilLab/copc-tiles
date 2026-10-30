@@ -12,15 +12,15 @@ non-background rendered pixels, cached resources, and tile/group disposal.
 This uses the same 3D Tiles/glTF bytes as Cesium. No Three-specific tile format
 or geometry encoding is introduced. The recorded run uses headless Chromium
 and SwiftShader; it is renderer integration evidence, not a hardware GPU
-benchmark. The latest default suite measured 103.3 ms until both models loaded
-and 27.8 ms for the two frames after load at 640×480. This Three run followed Cesium in the
-same browser server and reused its fixture resource cache, so the values are
-not directly comparable with the Cesium cold-load time.
+benchmark. The 2026-10-30 full browser suite measured 55.1 ms until both
+models loaded and 28.4 ms for the two frames after load at 640×480. This Three
+run followed Cesium in the same browser server and reused its fixture resource
+cache, so the values are not directly comparable with the Cesium cold-load time.
 
-## Real Adapter Core candidate
+## Real Adapter 0.7.1 Registry package
 
-The real-source test uses the packed Adapter `/core` candidate built from
-`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`. The same pre-generated one-node
+The real-source test imports the public `/core` export from the actual
+published Adapter 0.7.1 Registry package. The same pre-generated one-node
 Autzen GLB used by Cesium is consumed through the public `3d-tiles-renderer`
 Three.js path. The Chromium integration passed with both `copc-js` and
 Rust/WASM. Three loaded and rendered 5,122 points before and after a camera
@@ -30,21 +30,23 @@ was about 1.5 µm; exact backend precision results are in the [packed API
 matrix](./adapter-api-compatibility.md). This is one pre-generated resource,
 not an on-demand or multi-node COPC tileset. At 640×480 the SwiftShader
 `copc-js` run produced 4,640 initial and 4,606 post-move non-background
-pixels. In the latest revalidation run, Three load/render measured 232.4 ms with
-`copc-js` and 202.9 ms with Rust/WASM. This is a single browser observation,
-not a stable latency distribution. The measurements include browser startup
-and local resource handling; they are not a hardware or Direct-rendering
-comparison.
+pixels. In the latest 2026-10-30 full browser run, Three load/render measured
+182.6 ms / 165.0 ms. The separate integration command measured 204.4 ms /
+182.6 ms. These are individual
+observations, not a stable latency distribution. The measurements include
+browser startup and local resource handling; they are not a hardware or
+Direct-rendering comparison.
 
-Adapter's ECEF point bound describes decoded points, not conservative bounds
-for undecoded cells. Keep [Adapter #383](https://github.com/mors119/copc-adapter/issues/383)
-open for a released public API and a potential transformed-cell-bound contract.
+Adapter 0.7.1 has a separate conservative source-cell API, but it reports
+`unsupported-horizontal-crs` for real Autzen EPSG:2992. No unsupported cell
+bound is replaced with decoded-point bounds. The real SoFi binary was not
+available for this revalidation.
 
 ## Acceptance boundary
 
 Fixture and real one-node Autzen rendering pass in headless Chromium with
 SwiftShader. Multi-level COPC hierarchy, zoom-driven refinement, source
 cancellation/cleanup during renderer requests, representative GPU performance,
-and cross-renderer visual coverage comparison remain unverified. The
-candidate's strict NodeNext declarations also fail TS2834. T10 therefore
-remains partial.
+and cross-renderer visual coverage comparison remain unverified. Strict packed
+NodeNext consumers now pass; projected multi-node bounds and live LOD remain
+the T10 blockers. T10 therefore remains partial.

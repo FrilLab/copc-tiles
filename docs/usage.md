@@ -10,6 +10,7 @@ not yet connect live COPC hierarchy requests to production multi-node Tiles LOD.
 ```ts
 import { createCopcCoreNodeSource } from '@frillab/copc-tiles/adapter/copc-core';
 import {
+  createPaddedEcefBoundsFromConservativeResult,
   TileNodeReader,
   encodePointCloudGlb,
 } from '@frillab/copc-tiles';
@@ -51,17 +52,44 @@ descriptor allows them; Rust/WASM explicitly rejects Extra Bytes requests.
 
 `view.context.decodedPointEcefBounds` is the bound for that decoded node's
 transformed point content and is labeled
-`decodedPointEcefBoundsKind: 'decoded-point-content'`. It can bound the loaded
-content. It is not a conservative bound for an undecoded hierarchy cell or
-undiscovered descendants. Adapter source-cell bounds remain in COPC source
-coordinates. Tiles does not transform cell corners and claim they bound an
-arbitrary nonlinear CRS or vertical-grid operation.
+`decodedPointEcefBoundsKind: 'decoded-point-content'`. It bounds loaded point
+content only. The connector also exposes the Adapter 0.7.1
+`source.getConservativeNodeEcefBounds(nodeKey)` capability for a complete
+source cell and its spatial descendants when Adapter certifies the active
+transform. This synchronous metadata-only call does not read points or issue
+network requests.
 
-The missing public conservative source-cell-to-ECEF bounds contract blocks
-production on-demand tileset generation for Autzen. The one-node examples and
-render checks below are bounded content checks; they do not implement live
-multi-node request scheduling or camera-driven COPC refinement. See the
-[proposed Adapter #383 follow-up](./adapter-383-bounds-followup.md).
+```ts
+const result = source.getConservativeNodeEcefBounds('4-11-2-0');
+if (result.status === 'unsupported') {
+  // Preserve/report result.reasonCode and result.reason; do not invent a bound.
+  throw new Error(`Cannot build a safe tile bound: ${result.reasonCode}`);
+}
+
+// The returned ECEF interval covers the source cell, but requires padding for
+// tile-local Float32 reconstruction. Use measured encoder error as padding.
+const content = encodePointCloudGlb(view);
+if (!content) throw new Error('The selected node has no points.');
+const bounds = createPaddedEcefBoundsFromConservativeResult(
+  result,
+  content.maxAbsoluteErrorMeters,
+);
+```
+
+The source-cell bound remains in COPC source axes and units; the supported
+conservative bound is WGS84 ECEF in metres; and decoded-point bounds cover only
+prepared points. All three stay distinct. Adapter result provenance includes
+source identity and generations, transform-plan identity, source-cell
+bounds, manual height offset and vertical-grid evidence when present. The
+result certifies analytic source-cell coverage but does not certify GLB
+Float32 reconstruction error; Tiles applies the measured encoder padding.
+
+The verified bounds cases include generated EPSG:4326 and EPSG:4979 WGS84
+fixtures with explicit ellipsoidal height. Unknown vertical reference returns
+`unsupported-vertical-reference`. Projected EPSG:2992 Autzen and EPSG:32611
+return `unsupported-horizontal-crs`, so these sources cannot use this
+multi-node bounds path. This capability does not itself implement live
+multi-node request scheduling or camera-driven COPC refinement.
 
 `TileNodeReader` resolves only requested node keys and has bounded hierarchy
 pages, ranges, decoded points, concurrency, and cancellation. It does not
@@ -71,37 +99,38 @@ points have not yet been decoded.
 
 ## Adapter compatibility
 
-Adapter PR #391 is merged at
-`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`. Tiles built and installed a packed
-candidate from that source commit and tested its `/core` ESM and declarations.
-The candidate's package metadata still says `0.6.0`; the published npm
-`0.6.0` tarball predates `/core`. Tiles therefore declares the optional peer
-range `>=0.6.1 <1.0.0`; no npm release in that range has been verified yet.
-See the [versioned API matrix](./adapter-api-compatibility.md) for its tarball
-hash, declaration-resolution limitation, backend results, and
-[Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383)
-follow-up.
+Tiles pins the verified published `@frillab/copc-adapter@0.7.1` package as an
+exact optional peer and development dependency. Its `/core` subpath publicly
+exports the node-source integration and conservative-bounds types/runtime.
+See the [versioned API matrix](./adapter-api-compatibility.md) for Registry
+integrity, exact method and result semantics, NodeNext checks, backend results,
+and the relationship to [Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383).
 
 ## Real-source browser checks
 
-The Autzen and SoFi Chromium tests run with both `copc-js` and Rust/WASM and
-use bounded HTTP Range requests. They encode real nodes, run Khronos and
+The configured Autzen Chromium tests run with both `copc-js` and Rust/WASM and
+use bounded HTTP Range requests. They encode a real node, run Khronos and
 CesiumGS validators, and render the same primary GLB bytes in Cesium and Three.
-SoFi reads and encodes three real hierarchy nodes across levels 2–4, but renders
-only the primary node. Both backends use Adapter's `head-fallback` Range
-validation because the browser origin does not expose `Content-Range`.
+The SoFi test accepts `COPC_TILES_SOFI_URL` or the legacy
+`COPC_TILES_SECOND_COPC_URL`; it is skipped when no real source is configured.
+Both backends use Adapter's `head-fallback` Range validation when the browser
+origin does not expose `Content-Range`.
 
 ```sh
 COPC_TILES_AUTZEN=/path/to/autzen-classified.copc.laz \
   npm run validate:adapter-integration
 
-COPC_TILES_SECOND_COPC_URL=https://hobu-lidar.s3.amazonaws.com/sofi.copc.laz \
+COPC_TILES_SOFI_URL=https://hobu-lidar.s3.amazonaws.com/sofi.copc.laz \
   npx playwright test --config test/browser/playwright.config.mjs \
   test/browser/second-source.real.spec.mjs
 ```
 
-These checks do not prove full-cloud coverage, multi-node conservative ECEF
-bounds, production LOD, or vertical-datum correctness. File/Blob input, real
-named Extra Bytes, and full source switching under camera
-churn remain unverified. See the [implementation status](./implementation-status.md)
-and [benchmark report](./benchmark-report-2026-10-29.md).
+The real Autzen source is projected and correctly returns
+`unsupported-horizontal-crs` for conservative source-cell bounds. Its
+one-node renderer check therefore does not demonstrate safe multi-node
+placement or production LOD. Geographic bounds fixtures exercise supported
+and unsupported vertical-reference results. These checks do not prove
+full-cloud coverage, validated vertical-grid behavior, File/Blob input, real
+named Extra Bytes, or full source switching under camera churn. See the
+[implementation status](./implementation-status.md) and
+[benchmark report](./benchmark-report-2026-10-29.md).

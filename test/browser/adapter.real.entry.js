@@ -111,6 +111,13 @@ window.startRealAdapterIntegration = async (options = {}) => {
     if (selectedNodes.length < requestedNodeCount) throw new Error(`Found ${selectedNodes.length} of ${requestedNodeCount} requested non-empty bounded nodes within ${maxHierarchyPages} hierarchy pages.`);
     const node = selectedNodes[0];
 
+    const rangeRequestCountBeforeBounds = sourceRequests.length;
+    const sourceConservativeBounds = source.getConservativeNodeEcefBounds(node.key);
+    const rangeRequestCountAfterBounds = sourceRequests.length;
+    if (rangeRequestCountAfterBounds !== rangeRequestCountBeforeBounds) {
+      throw new Error('Conservative bounds evaluation unexpectedly issued a source network request.');
+    }
+
     stageStartedAt = performance.now();
     const availablePrepared = await source.loadPreparedNodeData(node, fields, { signal: options.signal });
     const publicViewMilliseconds = performance.now() - stageStartedAt;
@@ -133,6 +140,10 @@ window.startRealAdapterIntegration = async (options = {}) => {
       sourceIdentity,
       ownsSource: false,
     });
+    const connectorConservativeBounds = connector.getConservativeNodeEcefBounds(node.key);
+    if (JSON.stringify(connectorConservativeBounds) !== JSON.stringify(sourceConservativeBounds)) {
+      throw new Error('The Tiles Core connector changed Adapter conservative bounds or provenance.');
+    }
     const reader = new TileNodeReader(connector, {
       maxHierarchyPages,
       maxHierarchyNodes: 50_000,
@@ -219,7 +230,10 @@ window.startRealAdapterIntegration = async (options = {}) => {
       adapterSourceGeneration: view.context.sourceGeneration,
       adapterTransformGeneration: view.context.transformGeneration,
       transformPlanIdentity: view.context.transformPlan.identity.key,
+      sourceHorizontalCrs: view.context.transformPlan.source.horizontalCrs,
       decodedPointBoundsKind: view.context.decodedPointEcefBoundsKind,
+      conservativeBounds: connectorConservativeBounds,
+      conservativeBoundsNetworkRequests: rangeRequestCountAfterBounds - rangeRequestCountBeforeBounds,
       sourceRequests,
       pipelineTimingsMilliseconds: {
         sourceOpen: sourceOpenMilliseconds,
@@ -267,6 +281,85 @@ window.startRealAdapterIntegration = async (options = {}) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown Adapter integration error.';
     throw new Error(message.replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted URL]'));
+  } finally {
+    connector?.close();
+    source?.close();
+    window.fetch = nativeFetch;
+  }
+};
+
+window.verifyConservativeBounds = async ({ url, backend = 'copc-js', contextOptions = {} }) => {
+  const sourceUrl = new URL(url, window.location.href);
+  const nativeFetch = window.fetch.bind(window);
+  const sourceRequests = [];
+  window.fetch = async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    const response = await nativeFetch(input, init);
+    const requestUrl = new URL(request.url);
+    sourceRequests.push({
+      isCopcSource: requestUrl.origin === sourceUrl.origin && requestUrl.pathname === sourceUrl.pathname,
+      method: request.method,
+      range: request.headers.get('Range'),
+    });
+    return response;
+  };
+  let source;
+  let connector;
+  try {
+    source = await createCopcContext(url, backend, {
+      rangeValidation: 'strict',
+      maxRangeBytes: 2 * 1024 * 1024,
+      maxConcurrentRangeRequests: 2,
+      ...contextOptions,
+    });
+    const root = source.getRootHierarchyPage();
+    const hierarchy = await source.loadHierarchyPage(root);
+    const node = hierarchy.nodes.find((candidate) => candidate.pointCount > 0);
+    if (!node) throw new Error('The geographic COPC fixture has no non-empty root hierarchy node.');
+
+    const beforeBounds = sourceRequests.filter((request) => request.isCopcSource).length;
+    const adapterResult = source.getConservativeNodeEcefBounds(node.key);
+    connector = new CopcCoreNodeSource({ source, sourceIdentity: `bounds-fixture:${backend}`, ownsSource: false });
+    const connectorResult = connector.getConservativeNodeEcefBounds(node.key);
+    const afterBounds = sourceRequests.filter((request) => request.isCopcSource).length;
+    if (afterBounds !== beforeBounds) throw new Error('Bounds evaluation unexpectedly issued a COPC Range request.');
+    if (JSON.stringify(adapterResult) !== JSON.stringify(connectorResult)) {
+      throw new Error('Tiles changed the published conservative bounds result.');
+    }
+
+    const prepared = await source.loadPreparedNodeData(node, new Set(['position']));
+    const ecef = prepared.pointData.world.coordinates;
+    let allPointsContained = adapterResult.status === 'supported';
+    if (adapterResult.status === 'supported') {
+      for (let offset = 0; offset < ecef.length; offset += 3) {
+        if (
+          ecef[offset] < adapterResult.boundsEcef.minX || ecef[offset] > adapterResult.boundsEcef.maxX ||
+          ecef[offset + 1] < adapterResult.boundsEcef.minY || ecef[offset + 1] > adapterResult.boundsEcef.maxY ||
+          ecef[offset + 2] < adapterResult.boundsEcef.minZ || ecef[offset + 2] > adapterResult.boundsEcef.maxZ
+        ) allPointsContained = false;
+      }
+    }
+    return {
+      backend,
+      nodeKey: node.key,
+      nodePointCount: node.pointCount,
+      decodedPointCount: prepared.pointData.pointCount,
+      horizontalCrs: source.transformPlan.source.horizontalCrs,
+      verticalCrs: source.transformPlan.source.verticalCrs,
+      verticalHeightKind: source.transformPlan.source.verticalHeightKind,
+      transformPlanIdentity: source.transformPlan.identity.key,
+      sourceGeneration: source.sourceGeneration,
+      transformGeneration: source.transformGeneration,
+      sourceCellBounds: adapterResult.sourceCellBounds,
+      sourceCoordinateSystem: adapterResult.sourceCoordinateSystem,
+      conservativeBounds: adapterResult,
+      pointContentBounds: prepared.ecefBounds,
+      pointContentBoundsKind: prepared.ecefBoundsKind,
+      allPointsContained,
+      rangeRequestsDuringBoundsEvaluation: afterBounds - beforeBounds,
+      totalRangeRequests: sourceRequests.filter((request) => request.isCopcSource).length,
+      sourceRequests,
+    };
   } finally {
     connector?.close();
     source?.close();

@@ -59,10 +59,11 @@
     "validate:resources": "node --import tsx --test test/tileResourceServer.test.mjs",
     "test:browser": "playwright test --config test/browser/playwright.config.mjs",
     "validate:adapter-integration": "playwright test --config test/browser/playwright.config.mjs test/browser/adapter.real.spec.mjs",
+    "test:packed-consumer": "node scripts/test-packed-consumer.mjs",
     "bench:engine": "node --expose-gc --import tsx bench/engine.mjs"
   },
   "peerDependencies": {
-    "@frillab/copc-adapter": "0.7.0"
+    "@frillab/copc-adapter": "0.7.1"
   },
   "peerDependenciesMeta": {
     "@frillab/copc-adapter": {
@@ -70,7 +71,7 @@
     }
   },
   "devDependencies": {
-    "@frillab/copc-adapter": "0.7.0",
+    "@frillab/copc-adapter": "0.7.1",
     "@playwright/test": "1.64.1",
     "3d-tiles-renderer": "0.5.3",
     "3d-tiles-validator": "0.6.1",
@@ -80,5 +81,11 @@
     "tsx": "^4.23.13",
     "typescript": "~5.9.3",
     "vite": "7.3.7"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "sharp@0.32.6": true
   }
 }
