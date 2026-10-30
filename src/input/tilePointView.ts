@@ -78,18 +78,47 @@ export type TileVerticalDatumEvidence = Readonly<{
   corrections: readonly TileVerticalCorrection[];
 }>;
 
+export type TileDecodedPointEcefBounds = Readonly<{
+  coordinateSystem: 'wgs84-ecef-meters';
+  minX: number;
+  minY: number;
+  minZ: number;
+  maxX: number;
+  maxY: number;
+  maxZ: number;
+}>;
+
+export type TileTransformPlanProvenance = Readonly<{
+  schema: 'copc-coordinate-transform-plan';
+  version: 1;
+  identity: Readonly<{ key: string }>;
+  manualHeightOffsetMeters: number;
+  [key: string]: unknown;
+}>;
+
 /** Node/source provenance is kept out of the point buffers. */
 export type TileNodeContext = Readonly<{
   /** Opaque, stable identity for the source instance; do not use a signed URL. */
   sourceIdentity: string;
   /** Stable node key supplied by the node reader. */
   nodeKey: string;
+  /** Adapter-assigned source lifetime generation when the source provides one. */
+  sourceGeneration?: number;
   /** Generation of the source/coordinate preparation used for these buffers. */
   transformGeneration: number;
   sourceCrs: TileSourceCrsEvidence;
   verticalDatum: TileVerticalDatumEvidence;
   /** Manual additive correction actually applied to prepared height, in metres. */
   heightOffsetMeters: number;
+  /** Adapter's immutable transform plan, retained as provenance without interpretation. */
+  transformPlan?: TileTransformPlanProvenance;
+  /** Standard LAS fields actually available on the loaded node. */
+  availableFields?: readonly string[];
+  /** Named Extra Dimensions actually returned on the loaded node. */
+  availableExtraDimensions?: readonly string[];
+  /** Tight bound over this decoded node's transformed points only. */
+  decodedPointEcefBounds?: TileDecodedPointEcefBounds;
+  decodedPointEcefBoundsKind?: 'decoded-point-content';
 }>;
 
 export type TileViewExpectation = Readonly<{
@@ -505,6 +534,9 @@ function snapshotAndValidateContext(
   if (!Number.isSafeInteger(value.transformGeneration) || value.transformGeneration < 0) {
     fail('INVALID_PROVENANCE', 'transformGeneration must be a non-negative safe integer.', 'transformGeneration');
   }
+  if (value.sourceGeneration !== undefined && (!Number.isSafeInteger(value.sourceGeneration) || value.sourceGeneration < 0)) {
+    fail('INVALID_PROVENANCE', 'sourceGeneration must be a non-negative safe integer.', 'sourceGeneration');
+  }
   if (!Number.isFinite(value.heightOffsetMeters)) {
     fail('INVALID_PROVENANCE', 'heightOffsetMeters must be finite.', 'heightOffsetMeters');
   }
@@ -523,14 +555,77 @@ function snapshotAndValidateContext(
 
   const sourceCrs = snapshotCrsEvidence(value.sourceCrs);
   const verticalDatum = snapshotVerticalEvidence(value.verticalDatum);
+  const transformPlan = value.transformPlan === undefined ? undefined : snapshotTransformPlan(value.transformPlan);
+  const availableFields = value.availableFields === undefined
+    ? undefined
+    : snapshotNameList(value.availableFields, 'availableFields');
+  const availableExtraDimensions = value.availableExtraDimensions === undefined
+    ? undefined
+    : snapshotNameList(value.availableExtraDimensions, 'availableExtraDimensions');
+  const decodedPointEcefBounds = value.decodedPointEcefBounds === undefined
+    ? undefined
+    : snapshotDecodedPointEcefBounds(value.decodedPointEcefBounds);
+  if (value.decodedPointEcefBoundsKind !== undefined && value.decodedPointEcefBoundsKind !== 'decoded-point-content') {
+    fail('INVALID_PROVENANCE', 'ECEF bounds must be labeled decoded-point-content.', 'decodedPointEcefBoundsKind');
+  }
+  if ((decodedPointEcefBounds === undefined) !== (value.decodedPointEcefBoundsKind === undefined)) {
+    fail('INVALID_PROVENANCE', 'Decoded-point ECEF bounds require their documented bounds kind.', 'decodedPointEcefBounds');
+  }
   return Object.freeze({
     sourceIdentity: value.sourceIdentity,
     nodeKey: value.nodeKey,
+    ...(value.sourceGeneration === undefined ? {} : { sourceGeneration: value.sourceGeneration }),
     transformGeneration: value.transformGeneration,
     sourceCrs,
     verticalDatum,
     heightOffsetMeters: value.heightOffsetMeters,
+    ...(transformPlan === undefined ? {} : { transformPlan }),
+    ...(availableFields === undefined ? {} : { availableFields }),
+    ...(availableExtraDimensions === undefined ? {} : { availableExtraDimensions }),
+    ...(decodedPointEcefBounds === undefined ? {} : {
+      decodedPointEcefBounds,
+      decodedPointEcefBoundsKind: 'decoded-point-content' as const,
+    }),
   });
+}
+
+function snapshotTransformPlan(value: TileTransformPlanProvenance): TileTransformPlanProvenance {
+  assertRecord(value, 'transformPlan', 'INVALID_PROVENANCE');
+  if (value.schema !== 'copc-coordinate-transform-plan' || value.version !== 1) {
+    fail('INVALID_PROVENANCE', 'Unsupported coordinate transform plan schema.', 'transformPlan');
+  }
+  assertRecord(value.identity, 'transformPlan.identity', 'INVALID_PROVENANCE');
+  if (typeof value.identity.key !== 'string' || value.identity.key.trim() === '') {
+    fail('INVALID_PROVENANCE', 'Transform plan identity must be non-empty.', 'transformPlan.identity.key');
+  }
+  if (!Number.isFinite(value.manualHeightOffsetMeters)) {
+    fail('INVALID_PROVENANCE', 'Transform plan height offset must be finite.', 'transformPlan.manualHeightOffsetMeters');
+  }
+  // Adapter documents the plan as immutable; preserve that exact object and
+  // avoid copying or interpreting its operation internals in Tiles.
+  return value;
+}
+
+function snapshotNameList(value: readonly string[], field: string): readonly string[] {
+  if (!Array.isArray(value) || value.some((name) => typeof name !== 'string' || name.trim() === '')) {
+    fail('INVALID_PROVENANCE', `${field} must contain non-empty strings.`, field);
+  }
+  if (new Set(value).size !== value.length) {
+    fail('INVALID_PROVENANCE', `${field} must not contain duplicates.`, field);
+  }
+  return Object.freeze([...value]);
+}
+
+function snapshotDecodedPointEcefBounds(value: TileDecodedPointEcefBounds): TileDecodedPointEcefBounds {
+  assertRecord(value, 'decodedPointEcefBounds', 'INVALID_PROVENANCE');
+  const coordinates = [value.minX, value.minY, value.minZ, value.maxX, value.maxY, value.maxZ];
+  if (value.coordinateSystem !== 'wgs84-ecef-meters' || coordinates.some((coordinate) => !Number.isFinite(coordinate))) {
+    fail('INVALID_PROVENANCE', 'Decoded-point ECEF bounds must contain finite WGS84 ECEF coordinates.', 'decodedPointEcefBounds');
+  }
+  if (value.minX > value.maxX || value.minY > value.maxY || value.minZ > value.maxZ) {
+    fail('INVALID_PROVENANCE', 'Decoded-point ECEF bounds have reversed limits.', 'decodedPointEcefBounds');
+  }
+  return Object.freeze({ ...value });
 }
 
 function snapshotCrsEvidence(value: TileSourceCrsEvidence): TileSourceCrsEvidence {

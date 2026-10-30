@@ -1,136 +1,111 @@
-# T2 node access
+# T2 node access through Adapter Core
 
 ## Scope
 
-`TileNodeReader` owns bounded lookup of explicitly requested node keys and
-bounded point-read concurrency. It does not select nodes from a camera, invoke
-Direct `NodeSelector`, or preload the whole hierarchy. The fixture source and
-the Adapter bridge both implement the same source-neutral `TileNodeSource`
-contract.
+`TileNodeReader` resolves only explicitly requested node keys with bounded,
+lazy hierarchy traversal and bounded point-read concurrency. It does not choose
+nodes from a camera, invoke Adapter's Direct `NodeSelector`, or preload the
+whole octree. Fixture sources and the Adapter connector implement the same
+source-neutral `TileNodeSource` contract.
 
-The reader follows opaque page references returned by the source. It loads
-pages until it finds every requested key, reaches a configured bound, or the
-loaded hierarchy proves the key absent. It does not parse an Adapter-specific
-key format. Duplicate keys in one request are read once. Node payloads are
-requested only after all keys resolve, so a partial key lookup does not cause
-partial point decoding.
+## Public `/core` connector
 
-`childrenComplete` is retained from each hierarchy record. If a key is missing
-and any loaded record reports incomplete child discovery, the reader returns
-`INCOMPLETE_HIERARCHY`; it does not infer a leaf or report a proven absence.
+`src/adapter/copcCoreAdapter.ts` consumes types from the public
+`@frillab/copc-adapter/core` export. `createCopcCoreNodeSource()` opens a
+context through `createCopcContext()` and owns it by default;
+`wrapCopcCoreNodeSource()` adapts an already-open `CopcNodeSource` and leaves
+ownership with its caller by default. The bridge calls only these public
+methods:
 
-## Public Adapter 0.6.0 bridge
+- `getRootHierarchyPage()` and `loadHierarchyPage(page, { signal })` for lazy
+  hierarchy access.
+- `loadPreparedNodeData(node, fields, { signal, extraDimensions })` for one
+  selected node.
+- `isCurrent(sourceGeneration)` and `close()` for generation and lifecycle
+  handling.
 
-The optional `CopcAdapterNodeSource` is typed against a structural subset of
-the public `CopcSource` API. A compile-time assertion checks that
-`CopcSource` from `@frillab/copc-adapter/cesium` satisfies that subset. The
-structural bridge imports no Adapter runtime module or private path.
+The prepared result's A-shaped point data is passed to `createTilePointViewFromA`
+without copying ECEF or selected attribute arrays. Adapter-provided
+`availableFields` and `availableExtraDimensions` decide which selected
+attributes are exposed. Missing fields stay absent. Tiles stores the stable
+node key, source generation, transform generation, immutable transform plan,
+available fields, and the decoded-point ECEF bounds with their documented
+kind. It does not create E from A or rehydrate an Adapter E cache.
 
-The bridge calls `loadPreparedPointData` when that public method exists. That
-path aliases the prepared A buffers through T1 and supplies a generation and
-CRS/vertical provenance callback. If fused preparation is unavailable, the
-bridge can call the public point-buffer or point-view APIs, but requires an
-application-supplied preparation callback. The point-view path also requires
-an application-supplied decoder. These callbacks must use public Adapter
-capabilities and return validated `TilePointView` data. The Tiles package does
-not duplicate LAZ decoding, Range reads, or coordinate transforms.
+Core reports decoded-point bounds only. They may bound the loaded node's point
+content; they are not transformed source-cell bounds for undecoded nodes. The
+connector never substitutes those bounds for a hierarchy cell envelope. This
+keeps full multi-node culling and LOD as an explicit T5/T9/T10 limitation until
+a conservative cell-bound policy exists.
 
-`createCopcJsAdapterNodeSource` is the optional integration factory for the
-public `@frillab/copc-adapter/cesium` entrypoint. When fused preparation is
-absent, it dynamically imports the public
-`transformPointBufferToPreparedPointData` helper and maps its A buffers into
-the source-neutral view. This renderer-entrypoint fallback is isolated from
-the engine initialization graph; a renderer-neutral public preparation API
-is still preferable and remains part of the proposal below.
+## Limits and failure handling
 
-Public Adapter point-load methods accept `AbortSignal`. Hierarchy page loading
-does not: the bridge checks cancellation and generation before and after the
-page request, so it stops follow-on work but cannot interrupt an in-flight
-Adapter hierarchy read. Closing a bridge aborts its own point operations; it
-calls Adapter-wide cancel/destroy methods only when it owns that source.
+The reader defaults remain 512 hierarchy pages / 64 MiB of hierarchy ranges,
+500,000 hierarchy records, 512 requested nodes, 2,000,000 points per node,
+4,000,000 points per batch, 64 selected Extra Dimensions, 256 MiB of point
+ranges per batch, 384 MiB of decoded views per batch, and four concurrent node
+reads. Configurable limits are clamped to documented hard caps.
 
-## Current bounds
+Hierarchy ranges, page/node records, point count, point byte ranges, decoded
+buffer lengths, source generations, requested node identity, and returned
+prepared identity are checked before data is exposed. Invalid or mismatched
+data fails without retry or fabricated values. Request signals pass through to
+both Core hierarchy-page reads and prepared-node reads. Closing a connector
+aborts its local requests; it closes the Core context only when it owns it.
 
-Default limits are 512 hierarchy pages / 64 MiB of hierarchy ranges, 500,000
-hierarchy records, 512 requested nodes, 2,000,000 points per node, 4,000,000
-points per batch, 64 selected extra dimensions, 256 MiB of point-data ranges
-per batch, 384 MiB of decoded views per batch, and four concurrent node reads.
-Every limit can be lowered or raised up to a hard cap. These are defensive
-defaults, not performance measurements.
-
-The point-data byte and point-count bounds are checked before point reads. The
-decoded view byte bound is checked after the source returns its arrays; source
-implementations must honor the node and field request bounds while preparing
-those arrays.
-
-## Acceptance mapping and limits
+## Acceptance evidence
 
 | Issue #2 criterion | Evidence / status |
 | --- | --- |
-| Request node keys without Direct `NodeSelector` or `StreamingManager` | Implemented in `src/source/tileNodeReader.ts`; repository scan shows neither is imported. |
-| Lazy hierarchy pages and bounded traversal | Implemented; fixture tests assert early stop, page bounds, incomplete hierarchy and safe ranges. |
-| Avoid duplicate requests | Duplicate requested keys in a batch are collapsed; exact fixture point-call count is one per unique key. Cross-call concurrent deduplication is a T8 resource-provider concern. |
-| Prepared and buffer/view outputs | Public fused reads are preferred; `createCopcJsAdapterNodeSource` provides a dynamic public-helper fallback. Real `copcJsBackend` output was tested with Autzen; Rust backend remains untested. |
-| Cancellation and generations | Point reads receive a composed `AbortSignal`; source/transform generation is checked before and after awaits. Adapter hierarchy page reads cannot be aborted in flight. |
-| Damaged Range and malformed hierarchy | Errors propagate without retry; malformed/unsafe hierarchy ranges fail before node data reads. The current Autzen check used a local bounded HTTP Range endpoint and confirmed six requests / 164,880 bytes rather than downloading the 81,123,042-byte object. |
+| Requested keys without Direct scheduler | Implemented in `src/source/tileNodeReader.ts`; repository scan shows no `NodeSelector` or `StreamingManager` imports in the Tiles connector. |
+| Lazy hierarchy pages and bounded traversal | Fixture tests cover early stop, page limits, incomplete hierarchy, unsafe ranges, and missing nodes. Real Autzen and SoFi hierarchy reads passed without full object downloads. |
+| Deduplicate node requests | Duplicate keys in one batch collapse to one point preparation; cross-call resource deduplication remains a T8 provider responsibility. |
+| Public prepared data path | Uses `CopcNodeSource.loadPreparedNodeData()` for all nodes. No `/cesium` fallback, copied decoder, point buffer rehydration, or duplicate CRS code. |
+| Cancellation and source lifecycle | Unit tests assert signals reach hierarchy and point methods, connector close aborts local work, owned context close is idempotent, and stale generations are rejected. |
+| Actual attributes and precise coordinates | Both datasets return position/intensity/classification on both backends; Autzen also returns RGB while SoFi omits absent RGB. ECEF stays the exact Adapter Float64 buffer. |
+| Packed package contract | Adapter candidate was packed from `c5b563b3d0c5743b8030a79eca8c820421c9d4a7` and installed by tarball path in a clean consumer. Node ESM and strict Bundler-mode declarations passed. Strict NodeNext exposes upstream TS2834 declaration errors; see the compatibility matrix. |
 
-## Real Autzen evidence
+## Real browser evidence
 
-On the campaign machine, the public Adapter 0.6.0 `copcJsBackend` opened the
-public Autzen sample (`https://s3.amazonaws.com/hobu-lidar/autzen-classified.copc.laz`;
-81,123,042 bytes; SHA-256
-`db2d56cdfa058bffccdc5d6019dae2fc9c6a551df10a5523c06c76a3e25a27fa`) using
-local HTTP Range responses. To rerun the browser check, provide the verified
-file path with `COPC_TILES_AUTZEN=/path/to/autzen-classified.copc.laz`.
-The Tiles reader
-resolved hierarchy pages and requested node `4-11-2-0` (5,122 points) under
-the configured 8,192-point / 2 MiB point-data limits. Available fields were
-`position`, `rgb`, `intensity`, and `classification`; returned samples were
-compared with the public Adapter point view. Six Range requests transferred
-164,880 bytes. The public buffer preparation helper produced ECEF Float64
-coordinates; source CRS was retained as unverified WKT and vertical datum as
-unknown. The encoded 119,292-byte GLB passed Khronos validation with zero
-errors and warnings. Its test-only one-node wrapper passed the CesiumGS
-validator and was rendered in both browser consumers.
+Autzen was 81,123,042 bytes with SHA-256
+`db2d56cdfa058bffccdc5d6019dae2fc9c6a551df10a5523c06c76a3e25a27fa`; the
+file stayed in `/private/tmp`. `validate:adapter-integration` passed for both
+backends in Chromium:
 
-This does not verify the full COPC hierarchy, on-demand COPC-to-resource
-generation, or production multi-node LOD. Actual preparation used the public
-`/cesium` entrypoint because a fused prepared-point method was not present in
-this backend instance. No Adapter internals were imported.
+- `copc-js`: node `4-11-2-0`, 5,122 points, 6 COPC Range GETs / 164,880 bytes.
+- Rust/WASM: same node and points, 7 COPC Range GETs / 101,455 bytes; WASM and
+  worker asset reads are separate from COPC ranges.
+- Both outputs passed Khronos glTF and CesiumGS 3D Tiles validators without
+  errors/warnings and rendered in Cesium and Three.
 
-## Adapter issue #383 proposal
+The SoFi tests passed with both `copc-js` and Rust/WASM: the first hierarchy
+response contained 2,599 nodes and 111 child-page references; three selected
+nodes at levels 2–4 loaded with exact hierarchy point counts. `copc-js` used
+8 Range GETs / 422,669 bytes; Rust/WASM used 9 / 359,053 bytes, including
+test-harness repeats. The browser could not read `Content-Range`, so both
+used Adapter's `head-fallback` policy.
 
-The current integration is pinned to the only verified package release,
-`0.6.0`; merged Adapter PR #391 has not been published and cannot be used as a
-released contract. The
-minimal remaining public contract for full multi-node tiles is tracked in
-[Adapter #383](https://github.com/mors119/copc-adapter/issues/383):
+No File/Blob, real named Extra Bytes, explicit vertical grid,
+complete octree, or production multi-node LOD result is claimed. The public
+Adapter candidate supports configured Extra Bytes on `copc-js`; Rust/WASM
+rejects non-empty Extra Bytes requests. See the
+[API compatibility matrix](./adapter-api-compatibility.md).
 
-1. Expose a transform-aware conservative ECEF bound for each undecoded
-   hierarchy cell, or a minimal adapter-owned operation to derive that bound
-   under the active horizontal/vertical transform. A bound over decoded points
-   cannot keep undiscovered descendants traversable.
-2. Attach stable source identity and transform generation to hierarchy pages,
-   node preparation and bound results, and reject stale results after source or
-   transform changes.
-3. Propagate `AbortSignal` through hierarchy page reads as well as point reads.
-4. Publish named hierarchy/node/page types and a renderer-neutral A prepared
-   node operation. These are needed for a stable packed connector; experimental
-   E buffers and named extra dimensions are optional for an initial A baseline.
+## Adapter #383 follow-up
 
-No Adapter files or issues are changed by this campaign.
+The public renderer-neutral source methods, node/page types, source and
+transform generations, cancellation, and A-shaped point preparation are now
+available in the packed candidate and exercised by Tiles. Remaining notes for
+[Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383):
 
-Adapter PR [#391](https://github.com/mors119/copc-adapter/pull/391) proposes a
-renderer-neutral `./core` node-source API, but it is not merged or published.
-The current connector remains pinned to the verified `0.6.0` public exports.
-The proposed API's decoded-point ECEF bounds do not supply conservative ECEF
-cell bounds for descendants that have not been read, so it does not by itself
-remove the production hierarchy/culling blocker.
-
-## Evidence boundary
-
-Tests use deterministic source fixtures and structurally compatible mocked
-Adapter sources, plus the bounded real Autzen/copc-js run above. Type tests
-compile against the published public 0.6.0 package types. This verifies one
-real public backend path, not the Rust backend, experimental E cache, full
-production tileset hierarchy, or in-flight hierarchy-page cancellation.
+1. Publish a release with `/core`; the immutable npm `0.6.0` artifact does not
+   include this API, although the source-built candidate's manifest says
+   `0.6.0`.
+2. Fix declaration imports so strict `NodeNext` consumers can typecheck the
+   packed `/core` entry.
+3. If full Tiles traversal needs culling before point decode, review a minimal
+   Adapter-owned conservative transformed-cell-bound contract. Tiles will not
+   treat the current decoded-point `ecefBounds` as that bound.
+4. No read-only E cache view is exposed. This is not required for the A
+   baseline; if Tiles later uses E, expose retained ECEF Float64 and prepared
+   height Float64 through a narrow public view instead of rehydrating A.

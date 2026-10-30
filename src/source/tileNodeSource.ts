@@ -33,7 +33,7 @@ export interface TileNodeSource {
   /** False after close, source replacement, or a transform-policy change. */
   isCurrent?(): boolean;
   getRootHierarchyPage(): TileHierarchyPage;
-  /** Implementations should honor the signal. Adapter 0.6.0 cannot cancel this call in flight. */
+  /** Implementations should honor the signal; synchronous decoders may only reject after the current decode finishes. */
   loadHierarchyPage(page: TileHierarchyPage, signal?: AbortSignal): Promise<TileHierarchyPageResult>;
   loadNode(
     node: TileHierarchyNode,

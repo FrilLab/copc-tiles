@@ -40,11 +40,11 @@ Validator on a generated tileset with GLB content and binary subtrees.
 The encoding follows the [CesiumGS implicit tiling specification](https://github.com/CesiumGS/3d-tiles/blob/main/specification/ImplicitTiling/README.adoc)
 and its [availability indexing rules](https://github.com/CesiumGS/3d-tiles/blob/main/specification/ImplicitTiling/AVAILABILITY.adoc).
 
-The public Adapter does not currently provide the conservative per-node ECEF
-bounds and transform generation needed to establish those cells. No real COPC
-octree is claimed; the required public capability is tracked in Adapter
-[issue #383](https://github.com/mors119/copc-adapter/issues/383).
-Adapter [PR #391](https://github.com/mors119/copc-adapter/pull/391) is merged
-in upstream source but is not in the published 0.6.0 package. The source API
-does not establish transformed conservative ECEF bounds for undecoded
-descendants.
+The packed Adapter `/core` candidate provides hierarchy access, transform
+generation and ECEF bounds for decoded point content. It does not provide a
+conservative transformed ECEF bound for an undecoded cell, so no real COPC
+implicit octree is claimed. Tiles does not substitute decoded-point bounds or
+transformed cell corners for that contract. The real Autzen pipeline stops
+before emitting `tileset.json` or subtree availability. See the proposed
+[Adapter #383 cell-bound API](./adapter-383-bounds-followup.md) and the
+[versioned API matrix](./adapter-api-compatibility.md).

@@ -7,4 +7,3 @@ export * from './implicit/octreeAvailability.js';
 export * from './tileset/explicitTileset.js';
 export * from './tileset/implicitOctreeTileset.js';
 export * from './resources/tileResourceServer.js';
-export * from './adapter/copcAdapterNodeSource.js';

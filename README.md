@@ -2,25 +2,24 @@
 
 **COPC → standard 3D Tiles 1.1** as a standalone, optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter).
 
-> **Status: 0.1.0 conditional review candidate; not published.** The engine, fixture validators, package-isolation checks, and bounded real Autzen and SoFi node checks pass. SoFi hierarchy metadata resolved three nodes at levels 2–4, and both Cesium and Three rendered the same real primary-node GLB. The renderer tests use a prebuilt one-node wrapper; full on-demand COPC hierarchy/LOD remains blocked by the current published Adapter contract. See [`docs/implementation-status.md`](docs/implementation-status.md) and the [full release audit](docs/release-audit-2026-10-29.md).
+> **Status: 0.1.0 conditional review candidate; not published.** The connector uses Adapter's renderer-neutral `/core` API and passed packed-candidate validation. Autzen passed one-node browser checks with `copc-js` and Rust/WASM; SoFi passed bounded three-node reads with both backends and rendered its primary node in both consumers. This does not establish real multi-node 3D Tiles LOD. On-demand COPC tiles are blocked because Adapter exposes source-CRS cell bounds but no conservative transformed ECEF bound for an undecoded cell. The exact API gap and proposed #383 follow-up are in [`docs/adapter-383-bounds-followup.md`](docs/adapter-383-bounds-followup.md). See [`docs/implementation-status.md`](docs/implementation-status.md) and the [API compatibility matrix](docs/adapter-api-compatibility.md).
 
 ## Why separate?
 
 COPC Adapter streams COPC points directly with CesiumJS and Three.js. COPC Tiles is an independent integration path for clients that require **standards-compliant 3D Tiles**. Projects using only the direct adapter must not pay a Tiles runtime, dependency, or install-size cost.
 
 - Package candidate: `@frillab/copc-tiles@0.1.0` (not published).
-- This standalone repository is the current development boundary. The packed
-  candidate is 73,876 compressed / 275,582 unpacked bytes and installs to
-  364 KiB in a clean Tiles-only consumer; measurements are in the
-  [benchmark report](docs/benchmark-report-2026-10-29.md).
-  The measured package and migration
-  comparison recommends keeping Tiles separately distributed even if the
-  source later shares an Adapter monorepo; maintainers still own the final
-  distribution decision. See
+- This standalone repository is the current development boundary. The latest
+  packed candidate is about 79 kB / 293 kB unpacked and installs to 376 KiB in a
+  clean Tiles-only consumer. A fresh same-machine install measured combined
+  Adapter + Tiles at 7,068 KiB; the candidate's 0.6.0 metadata required
+  `--legacy-peer-deps` because Tiles reserves `>=0.6.1 <1.0.0`.
+  The distribution comparison remains open until both release models have
+  packed bundle and release-overhead evidence. See
   [`docs/adapter-migration-assessment.md`](docs/adapter-migration-assessment.md).
 - Adapter package: `@frillab/copc-adapter` ([upstream repository](https://github.com/mors119/copc-adapter)).
 - Dependency direction: **copc-tiles → copc-adapter**, never the reverse.
-- Reuse approved, stable, *public* adapter APIs for COPC hierarchy/Range/decode/CRS and read-only point data. Do not import upstream private `packages/core/**` files.
+- Reuse verified *public* Adapter APIs for COPC hierarchy/Range/decode/CRS and read-only point data. The `/core` candidate is built from upstream commit `c5b563b3d0c5743b8030a79eca8c820421c9d4a7`; the published `0.6.0` artifact does not include it. Do not import upstream private `packages/core/**` files.
 - Where required public APIs do not exist, define the narrowest viable contract and propose a separate, reviewed upstream PR. Never duplicate the entire COPC decoder or silently use private exports.
 - Keep direct `/cesium`, `/three`, source/cache defaults, behavior, and consumers unaffected.
 
@@ -86,11 +85,15 @@ commands, source evidence, limitations and release classification.
 5. Measure clean Direct COPC bundle and **npm install** footprint without Tiles; tree shaking is not sufficient proof of install-size isolation.
 6. Do not publish, deploy or claim full T12 completion before maintainer review and required passing gates.
 
-The tested integration versions are Adapter `0.6.0`, CesiumJS `1.146.0`,
-Three.js `0.186.1`, `3d-tiles-renderer` `0.5.3`, and Chromium
-`156.0.8078.4`. These are tested points, not declared broad renderer/browser
-compatibility ranges. The published Adapter 0.6.0 does not include the
-renderer-neutral `/core` API merged in upstream PR #391.
+The tested Adapter candidate tarball is packed from source commit
+`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`; its package metadata still says
+`0.6.0`, while published Adapter `0.6.0` has no `/core`. Tiles' optional peer
+range is `>=0.6.1 <1.0.0`; no npm release in that range has been verified.
+CesiumJS `1.146.0`, Three.js `0.186.1`, `3d-tiles-renderer` `0.5.3`, and
+Chromium are tested points, not declared broad compatibility ranges. The
+candidate's `/core` declarations pass strict bundler resolution and fail
+strict `NodeNext` with TS2834 due to extensionless declaration imports; see
+the matrix.
 
 ## Development policy
 
@@ -98,11 +101,13 @@ See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
 **AWAITING MAINTAINER REVIEW**. Keep GitHub issues/PRs in English. This README
 is the public architecture and implementation roadmap.
 
-The packed Tiles engine runtime targets Node `>=18`. Unit tests pass on Node
-`18.20.8`, `22.23.4`, and `26.12.1`; typecheck/build passed on Node 18 and 26.
-The clean development install on Node 26 remains blocked by the
-development-only `better-sqlite3@11.10.0` validator dependency. Browser
-verification has been run on Chromium only; Firefox and WebKit are unverified.
+The packed Tiles engine runtime targets Node `>=18`. This integration pass
+used Node `26.12.1`; `npm test` passed 66 tests, and unit/type/build checks
+passed with the packed Adapter candidate installed. Normal `npm ci` remains
+blocked on this machine by the development-only `better-sqlite3@11.10.0`
+native build; installing with scripts disabled and rebuilding Sharp with
+`SHARP_IGNORE_GLOBAL_LIBVIPS=1` allowed the test suite to run. Real-source
+browser verification used Chromium; Firefox and WebKit are unverified.
 
 ## Original planning history
 
