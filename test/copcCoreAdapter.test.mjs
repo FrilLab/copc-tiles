@@ -119,10 +119,15 @@ test('loads A-shaped prepared point data through public Core methods without cop
   assert.equal(source.closedCount, 0, 'wrapping a caller-owned context does not close it');
 });
 
-test('uses actual available fields and omits source fields the node does not contain', async () => {
+test('rejects explicitly requested standard fields that are unavailable', async () => {
   const prepared = preparedData({ available: ['position', 'intensity'] });
   const source = makeSource({ loadPreparedNodeData: async () => prepared });
-  const view = await wrap(source).loadNode(node, { attributes: { rgb: true, intensity: true } });
+  const bridge = wrap(source);
+  await assert.rejects(
+    bridge.loadNode(node, { attributes: { rgb: true } }),
+    (error) => error.code === 'MISSING_REQUESTED_FIELD' && error.field === 'rgb',
+  );
+  const view = await bridge.loadNode(node, { attributes: { intensity: true } });
   assert.deepEqual(view.context.availableFields, ['position', 'intensity']);
   assert.equal(view.attributes?.rgb, undefined);
   assert.equal(view.attributes?.red, undefined);
@@ -144,6 +149,16 @@ test('requests exact Extra Dimension names and preserves returned BigUint64 data
   assert.deepEqual(view.context.availableExtraDimensions, ['track_id']);
   assert.equal(view.attributes.extraDimensions.track_id, prepared.pointData.attributes.extraDimensions.track_id);
   assert.deepEqual([...view.attributes.extraDimensions.track_id], [9007199254740993n, 9007199254740993n]);
+});
+
+test('rejects an explicitly requested Extra Dimension when Core did not return it', async () => {
+  const source = makeSource({
+    loadPreparedNodeData: async () => preparedData({ available: ['position'], extras: [] }),
+  });
+  await assert.rejects(
+    wrap(source).loadNode(node, { attributes: { extraDimensions: ['track_id'] } }),
+    (error) => error.code === 'MISSING_REQUESTED_FIELD' && error.field === 'track_id',
+  );
 });
 
 test('TileNodeReader follows Core hierarchy pages and deduplicates requested node keys', async () => {

@@ -147,7 +147,6 @@ export class CopcCoreNodeSource implements TileNodeSource {
       validatePreparedIdentity(prepared, node, this.#source, this.sourceGeneration, this.transformGeneration);
       validateDecodedPointBounds(prepared, node.key);
 
-      const actualSelection = selectionForAvailableData(selected, prepared);
       const context = createNodeContext(
         this.sourceIdentity,
         node.key,
@@ -157,7 +156,7 @@ export class CopcCoreNodeSource implements TileNodeSource {
         prepared.pointData,
         context,
         { sourceIdentity: this.sourceIdentity, transformGeneration: this.transformGeneration },
-        actualSelection,
+        selected,
       );
       if (view.pointCount !== node.pointCount || view.context.nodeKey !== node.key) {
         throw new CopcCoreAdapterError('NODE_MISMATCH', 'Prepared data does not match the requested node identity or point count.', node.key);
@@ -265,27 +264,6 @@ function copyNodeToCore(node: TileHierarchyNode): CopcHierarchyNode {
     ...(node.children === undefined ? {} : { children: [...node.children] }),
     ...(node.childrenComplete === undefined ? {} : { childrenComplete: node.childrenComplete }),
   };
-}
-
-function selectionForAvailableData(
-  requested: TilePointFieldSelection,
-  prepared: CopcPreparedNodeData,
-): TilePointFieldSelection {
-  const available = prepared.availableFields;
-  const requestedAttributes = requested.attributes;
-  const extras = new Set(prepared.availableExtraDimensions);
-  const actualExtraDimensions = (requestedAttributes?.extraDimensions ?? []).filter((name) =>
-    extras.has(name) && Object.hasOwn(prepared.pointData.attributes?.extraDimensions ?? {}, name),
-  );
-  return Object.freeze({
-    ...(requested.coordinates === undefined ? {} : { coordinates: requested.coordinates }),
-    attributes: Object.freeze({
-      ...(requestedAttributes?.rgb && available.has('rgb') ? { rgb: true } : {}),
-      ...(requestedAttributes?.intensity && available.has('intensity') ? { intensity: true } : {}),
-      ...(requestedAttributes?.classification && available.has('classification') ? { classification: true } : {}),
-      ...(actualExtraDimensions.length > 0 ? { extraDimensions: Object.freeze(actualExtraDimensions) } : {}),
-    }),
-  });
 }
 
 function createNodeContext(

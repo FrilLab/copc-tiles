@@ -102,7 +102,7 @@ See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
 is the public architecture and implementation roadmap.
 
 The packed Tiles engine runtime targets Node `>=18`. This integration pass
-used Node `26.12.1`; `npm test` passed 66 tests, and unit/type/build checks
+used Node `26.12.1`; `npm test` passed 67 tests, and unit/type/build checks
 passed with the packed Adapter candidate installed. Normal `npm ci` remains
 blocked on this machine by the development-only `better-sqlite3@11.10.0`
 native build; installing with scripts disabled and rebuilding Sharp with

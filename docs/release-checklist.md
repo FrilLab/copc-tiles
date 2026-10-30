@@ -18,7 +18,7 @@ published, no GitHub Release was created, and no issues were closed.
   browser build. See [`adapter-api-compatibility.md`](adapter-api-compatibility.md)
   and the repository-only [`PACKED_CONSUMER_RECORD.md`](../PACKED_CONSUMER_RECORD.md).
 - [x] Run `npm run typecheck`, `npm run typecheck:adapter-core`, `npm run
-  build`, and `npm test` (66 passed). The test suite covers source close,
+  build`, and `npm test` (67 passed). The test suite covers source close,
   cancellation, stale generations, actual attribute availability, exact named
   Extra Dimension selection, and BigUint64 buffer identity.
 - [x] Run real-source Chromium integration with the packed Adapter candidate:

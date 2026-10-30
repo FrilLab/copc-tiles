@@ -56,7 +56,7 @@ evidence.
 | [T8 #8](https://github.com/FrilLab/copc-tiles/issues/8) Resource serving | Partial | Route safety, LRU, cancellation, concurrency, generation and source-switch fixture tests; both renderers fetch identical GLB bytes. | No Core-backed on-demand provider, live subtree generation, or cancellation/source replacement through a real COPC renderer request. |
 | [T9 #9](https://github.com/FrilLab/copc-tiles/issues/9) Cesium | Partial | Real Autzen one-node wrappers with both Adapter backends and SoFi one-node wrappers with both backends rendered after camera movement. | No multi-node tileset, zoom-driven COPC refinement, parent-child coverage, live cancellation/source switch, or Direct comparison. |
 | [T10 #10](https://github.com/FrilLab/copc-tiles/issues/10) Three | Partial | Same one-node GLB bytes as Cesium for Autzen and SoFi on both backends; point/metadata visibility and tile cleanup passed. | No multi-level Tiles LOD, live provider, cancellation/source replacement during real reads, or full consumer/version matrix. |
-| [T11 #11](https://github.com/FrilLab/copc-tiles/issues/11) Standards/security | Partial | `npm test`: 66 passed; real glTF and Tiles validators pass; packed candidate ESM and Bundler declarations pass. | Candidate strict NodeNext declarations fail TS2834; malformed real Range responses, File/Blob, vertical-grid, and real Extra Bytes remain untested. |
+| [T11 #11](https://github.com/FrilLab/copc-tiles/issues/11) Standards/security | Partial | `npm test`: 67 passed; real glTF and Tiles validators pass; packed candidate ESM and Bundler declarations pass. | Candidate strict NodeNext declarations fail TS2834; malformed real Range responses, File/Blob, vertical-grid, and real Extra Bytes remain untested. |
 | [T12 #12](https://github.com/FrilLab/copc-tiles/issues/12) Performance/package | Partial | Real node preparation/GLB/renderer timings and retained point-view buffer bytes are recorded separately from previous A/E synthetic results. | No production multi-node LOD timings, peak temporary or total retained browser memory, Direct/on-demand/pre-generated comparison, real E path, or release provenance workflow. |
 
 ## Verification summary
@@ -71,7 +71,7 @@ evidence.
   `/core` module.
 - Tiles: `npm run typecheck`, `npm run typecheck:adapter-core`, and
   `npm run build` passed with the packed candidate installed.
-- Tiles: `npm test` passed all 66 tests. This machine's normal `npm ci` failed
+- Tiles: `npm test` passed all 67 tests. This machine's normal `npm ci` failed
   to build development-only `better-sqlite3@11.10.0` on Node `26.12.1`. The
   dependency install used `npm ci --ignore-scripts`; rebuilding Sharp with
   `SHARP_IGNORE_GLOBAL_LIBVIPS=1` enabled the validator tests.
