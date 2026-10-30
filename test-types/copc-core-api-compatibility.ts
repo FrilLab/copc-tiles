@@ -1,5 +1,12 @@
-// @ts-ignore -- published Adapter 0.6.0 predates /core; compile against the packed candidate in compatibility validation.
-import type { CopcHierarchyNode, CopcNodeSource, CopcPointFieldSelection, CopcPreparedNodeData } from '@frillab/copc-adapter/core';
+import type {
+  CopcHierarchyBounds,
+  CopcHierarchyNode,
+  CopcMetadata,
+  CopcNodeSource,
+  CopcPointFieldSelection,
+  CopcPreparedNodeData,
+  CoordinateTransformPlan,
+} from '@frillab/copc-adapter/core';
 import type { TilePointFieldSelection, PreparedPointDataAInput } from '../src/input/tilePointView.js';
 import type { TileNodeSource } from '../src/source/tileNodeSource.js';
 import type { CopcCoreNodeSource, CopcCoreNodeSourceOptions } from '../src/adapter/copcCoreAdapter.js';
@@ -9,6 +16,9 @@ type CorePreparedDataIsACompatible = Assert<CopcPreparedNodeData['pointData'] ex
 type CoreNodeAcceptsPublicHierarchyNode = Assert<Parameters<CopcNodeSource['loadPreparedNodeData']>[0] extends CopcHierarchyNode ? true : false>;
 type CoreSelectionAcceptsTileFields = Assert<ReturnType<typeof toCoreFields> extends CopcPointFieldSelection ? true : false>;
 type CoreConnectorImplementsTileSource = Assert<CopcCoreNodeSource extends TileNodeSource ? true : false>;
+type CoreMetadataContractIsPublic = Assert<ReturnType<CopcNodeSource['getMetadata']> extends CopcMetadata ? true : false>;
+type CoreBoundsContractIsSourceSpace = Assert<ReturnType<CopcNodeSource['getNodeCellBounds']> extends CopcHierarchyBounds ? true : false>;
+type CoreTransformPlanIsPublic = Assert<CopcNodeSource['transformPlan'] extends CoordinateTransformPlan ? true : false>;
 
 function toCoreFields(_selection: TilePointFieldSelection): ReadonlySet<'position' | 'rgb' | 'intensity' | 'classification'> {
   return new Set(['position']);
@@ -26,4 +36,7 @@ export type CopcCoreApiCompatibility =
   | CorePreparedDataIsACompatible
   | CoreNodeAcceptsPublicHierarchyNode
   | CoreSelectionAcceptsTileFields
-  | CoreConnectorImplementsTileSource;
+  | CoreConnectorImplementsTileSource
+  | CoreMetadataContractIsPublic
+  | CoreBoundsContractIsSourceSpace
+  | CoreTransformPlanIsPublic;

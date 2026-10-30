@@ -62,7 +62,7 @@
     "bench:engine": "node --expose-gc --import tsx bench/engine.mjs"
   },
   "peerDependencies": {
-    "@frillab/copc-adapter": ">=0.6.1 <1.0.0"
+    "@frillab/copc-adapter": "0.7.0"
   },
   "peerDependenciesMeta": {
     "@frillab/copc-adapter": {
@@ -70,6 +70,7 @@
     }
   },
   "devDependencies": {
+    "@frillab/copc-adapter": "0.7.0",
     "@playwright/test": "1.64.1",
     "3d-tiles-renderer": "0.5.3",
     "3d-tiles-validator": "0.6.1",
