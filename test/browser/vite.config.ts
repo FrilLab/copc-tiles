@@ -11,7 +11,13 @@ const copcRequests: Array<Readonly<{ method: string; range?: string }>> = [];
 let copcRangeBytes = 0;
 let copcRangeCount = 0;
 let fixtureGeneration = 1;
-const realCopcPath = process.env.COPC_TILES_AUTZEN;
+const realCopcPaths = new Map<string, string | undefined>([
+  ['/__copc/autzen.copc.laz', process.env.COPC_TILES_AUTZEN],
+  ['/__copc/geographic-4326.copc.laz', process.env.COPC_TILES_BOUNDS_4326_COPC],
+  ['/__copc/geographic-4326-ellipsoidal.copc.laz', process.env.COPC_TILES_BOUNDS_4326_ELLIPSOIDAL_COPC],
+  ['/__copc/geographic-4979.copc.laz', process.env.COPC_TILES_BOUNDS_4979_COPC],
+  ['/__copc/projected-32611.copc.laz', process.env.COPC_TILES_BOUNDS_32611_COPC],
+]);
 const browserPort = Number(process.env.COPC_TILES_BROWSER_PORT ?? 4173);
 const browserOrigin = `http://127.0.0.1:${browserPort}`;
 const cesiumBuild = resolve(process.cwd(), 'node_modules/cesium/Build/Cesium');
@@ -134,10 +140,11 @@ function browserResourcesPlugin(): Plugin {
           }
           return;
         }
-        if (pathname === '/__copc/autzen.copc.laz') {
+        if (realCopcPaths.has(pathname)) {
+          const realCopcPath = realCopcPaths.get(pathname);
           if (!realCopcPath) {
             response.statusCode = 404;
-            response.end('Set COPC_TILES_AUTZEN to serve the real sample by byte range.');
+            response.end(`Set the corresponding COPC_TILES_* environment variable to serve ${pathname} by byte range.`);
             return;
           }
           const range = request.headers.range;
@@ -166,9 +173,16 @@ function browserResourcesPlugin(): Plugin {
               return;
             }
             const start = Number(match[1]);
-            const end = Number(match[2]);
+            const requestedEnd = Number(match[2]);
+            if (!Number.isSafeInteger(start) || !Number.isSafeInteger(requestedEnd) || start < 0 || requestedEnd < start || start >= size) {
+              response.statusCode = 416;
+              response.setHeader('Content-Range', `bytes */${size}`);
+              response.end('The requested range is invalid or exceeds 16 MiB.');
+              return;
+            }
+            const end = Math.min(requestedEnd, size - 1);
             const length = end - start + 1;
-            if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end >= size || length > 16 * 1024 * 1024) {
+            if (length > 16 * 1024 * 1024) {
               response.statusCode = 416;
               response.setHeader('Content-Range', `bytes */${size}`);
               response.end('The requested range is invalid or exceeds 16 MiB.');

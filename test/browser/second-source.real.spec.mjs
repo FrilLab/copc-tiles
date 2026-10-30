@@ -10,8 +10,8 @@ import { resetServerStats } from './browser-utils.mjs';
 
 for (const backend of ['copc-js', 'rust']) {
 test(`optional second real COPC /core ${backend}: bounded read, encode, validate and render`, async ({ page }) => {
-  const url = process.env.COPC_TILES_SECOND_COPC_URL;
-  test.skip(!url, 'Set COPC_TILES_SECOND_COPC_URL to a public CORS-enabled COPC source for this opt-in test.');
+  const url = process.env.COPC_TILES_SOFI_URL ?? process.env.COPC_TILES_SECOND_COPC_URL;
+  test.skip(!url, 'Set COPC_TILES_SOFI_URL to the public CORS-enabled SoFi COPC source for this opt-in test.');
   test.setTimeout(180_000);
   const pageErrors = [];
   const rendererGlbHashes = [];
@@ -36,6 +36,14 @@ test(`optional second real COPC /core ${backend}: bounded read, encode, validate
   assert.ok(Number.isSafeInteger(result.adapterSourceGeneration));
   assert.ok(Number.isSafeInteger(result.adapterTransformGeneration));
   assert.equal(result.decodedPointBoundsKind, 'decoded-point-content');
+  assert.equal(result.conservativeBounds.status, 'unsupported');
+  assert.equal(result.conservativeBounds.reasonCode, 'unsupported-horizontal-crs');
+  assert.equal(result.conservativeBounds.sourceGeneration, result.adapterSourceGeneration);
+  assert.equal(result.conservativeBounds.transformGeneration, result.adapterTransformGeneration);
+  assert.equal(result.conservativeBounds.transformPlanIdentity, result.transformPlanIdentity);
+  assert.equal(result.conservativeBoundsNetworkRequests, 0);
+  assert.equal(result.sourceHorizontalCrs.authority, 'EPSG');
+  assert.equal(result.sourceHorizontalCrs.code, '32611');
   assert.ok(result.nodePointCount > 0 && result.nodePointCount <= 8192);
   assert.equal(result.encodedPointCount, result.nodePointCount);
   assert.equal(result.multiNodeSummary.length, 3);
@@ -138,7 +146,7 @@ test(`optional second real COPC /core ${backend}: bounded read, encode, validate
   assert.ok(cesium.latitudeDegrees > 33.93 && cesium.latitudeDegrees < 33.97);
 
   console.log(JSON.stringify({
-    source: 'configured second COPC', nodeKey: result.nodeKey, points: result.nodePointCount, fields: result.availableFields,
+    source: 'SoFi COPC', nodeKey: result.nodeKey, points: result.nodePointCount, fields: result.availableFields,
     hierarchyPages: result.hierarchyPagesRead, hierarchyNodesSeen: result.hierarchyNodeCount,
     childPageRefsSeen: result.hierarchyChildPageRefs, hierarchyLevelCounts: result.hierarchyLevelCounts,
     multiNodeSummary: result.multiNodeSummary, multiNodeRetainedPointBufferBytes: result.multiNodeRetainedPointBufferBytes,

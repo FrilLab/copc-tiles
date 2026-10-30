@@ -1,88 +1,71 @@
-# Release checklist — 2026-10-30
+# Release checklist — Adapter 0.7.1 integration
 
-This is a current review record for the Adapter `/core` integration. The
-2026-10-29 package audit remains historical in
-[`release-audit-2026-10-29.md`](release-audit-2026-10-29.md). No npm package was
-published, no GitHub Release was created, and no issues were closed.
+This is the current review record for the Adapter 0.7.1 integration and
+conservative-bounds capability. It is not a release approval. No npm package
+was published, no GitHub Release was created, no issue was closed, and no
+Adapter change was made.
 
-## Verified in this pass
+## Verified in this milestone
 
-- [x] Read repository instructions, README, implementation status, relevant
-  Tiles issue criteria, Adapter issue #383 and merged Adapter PR #391.
-- [x] Build and pack Adapter source commit
-  `c5b563b3d0c5743b8030a79eca8c820421c9d4a7`; record its tarball SHA-256.
-- [x] Replace the previous bridge with the public
-  `@frillab/copc-adapter/core` connector and remove the old `/cesium` bridge.
-- [x] Install the Adapter and Tiles tarballs in clean consumers. Verify public
-  ESM resolution, strict Bundler-mode TypeScript declarations, and a Vite
-  browser build. See [`adapter-api-compatibility.md`](adapter-api-compatibility.md)
-  and the repository-only [`PACKED_CONSUMER_RECORD.md`](../PACKED_CONSUMER_RECORD.md).
-- [x] Run `npm run typecheck`, `npm run typecheck:adapter-core`, `npm run
-  build`, and `npm test` (67 passed). The test suite covers source close,
-  cancellation, stale generations, actual attribute availability, exact named
-  Extra Dimension selection, and BigUint64 buffer identity.
-- [x] Run real-source Chromium integration with the packed Adapter candidate:
-  Autzen and SoFi with both `copc-js` and Rust/WASM. Khronos glTF and CesiumGS
-  Tiles validators reported zero errors/warnings for the tested real content.
-- [x] Re-run the fixture browser suite and the real sources after adding
-  retained point-view buffer accounting. SoFi prepared and encoded three
-  hierarchy nodes at levels 2–4, including a stable parent/child pair; only
-  the primary node was placed and rendered by the one-node wrapper.
-- [x] Record per-run node preparation, GLB encoding, rendered-node timing,
-  retained point-view buffer bytes and generated GLB bytes. Peak temporary
-  memory and total retained browser/Adapter memory were not measured.
-- [x] Measure clean Adapter-only, Tiles-only, and combined installs. Tiles-only
-  installs no Adapter or renderer packages; exact sizes and the release
-  candidate tarball checksum are recorded in `PACKED_CONSUMER_RECORD.md`.
-- [x] Record candidate limits honestly: published Adapter `0.6.0` lacks
-  `/core`; candidate strict NodeNext types fail TS2834; real named Extra Bytes,
-  File/Blob and explicit vertical grids were not exercised.
-- [x] Keep all T1–T12 issues open. Adapter #383 remains open for a released
-  public contract and any reviewed transformed-cell-bound capability.
+- [x] Read repository instructions, README, all T1–T12 issue acceptance
+  criteria, Adapter issue #383, and relevant release/API documentation.
+- [x] Verify npm Registry `0.7.1` version, exports, integrity, package size,
+  optional peer dependencies and actual downloaded tarball.
+- [x] Pin the exact `0.7.1` development and optional peer dependency; update
+  lockfile while retaining optional peer metadata.
+- [x] Verify normal clean installs on Node 18.20.8 and 22.23.4. Record the
+  development-only `better-sqlite3@11.10.0` Node 26 V8 build failure and the
+  successful Node 26 test run after local Sharp rebuild.
+- [x] Extend the source-neutral connector using only public Adapter `/core`
+  types and runtime API. Preserve unsupported reasons and provenance; fail
+  closed on missing/mismatched API or unsupported results.
+- [x] Exercise supported EPSG:4326 / EPSG:4979 geographic fixtures and
+  unsupported unknown-height and EPSG:32611 projected fixtures with both
+  backends. Bounds evaluation made no source Range requests.
+- [x] Verify real Autzen requested-node read, both backends, GLB validation,
+  Cesium/Three point visibility, movement, encoder precision and explicit
+  `unsupported-horizontal-crs` result.
+- [x] Add packed consumer coverage for strict TypeScript 5.9.3 NodeNext and
+  Bundler checks, Adapter root/Core/Cesium/Three imports, renderer-free Core,
+  and Adapter-free Tiles Engine usage.
+- [x] Run typecheck, Adapter Core typecheck, build, all unit/validator/resource
+  suites, Chromium integration, benchmark, runtime-scope audit, packed
+  consumer, and pack dry-run. Exact pass/skip counts are in
+  [`implementation-status.md`](./implementation-status.md).
+- [x] Keep all T1–T12 issues open and report remaining criteria individually.
 
-## Remaining before full COPC-to-Tiles support
+## Still required before complete COPC-to-Tiles support
 
-- [ ] Adapter publishes a reviewed version containing `/core`, with strict
-  NodeNext declaration imports fixed; rerun packed checks against that exact
-  release and establish the supported version range.
-- [ ] Review a public conservative transformed ECEF bound for undecoded cells
-  if production traversal requires it. Decoded-point `ecefBounds` cannot serve
-  as that bound.
-- [ ] Connect production multi-node COPC reads to Tiles resource requests.
-  Verify hierarchy completeness, sparse/empty nodes, subtree boundaries,
-  geometric error, ADD semantics, bounded queues and request cancellation.
-- [ ] Render live multi-node/refining sources in Cesium and Three with the same
-  bytes and URLs. Verify source switching and cleanup during camera requests.
-- [ ] Compare Direct COPC, on-demand Tiles and pre-generated Tiles using the
-  same dataset and camera path; record repeated median/p95, transfer, CPU,
-  browser memory, worker activity and cancellation results.
-- [ ] Test real named Extra Bytes, File/Blob input, malformed real Range
-  responses, supported CRS/vertical transforms and independent CRS reference
-  data. Rust/WASM currently rejects non-empty Extra Bytes requests.
-- [ ] Complete the intended browser and operating-system matrix. This pass
-  covers Chromium on macOS arm64; Firefox, WebKit, Windows and Linux remain
-  unverified.
-- [ ] Reconcile the prior `npm audit` findings with supported validator
-  releases; the audit was not rerun in this pass.
+- [ ] Real SoFi integration with both backends, hierarchy nodes, prepared
+  points, GLB and renderers. This run skipped it because no binary or URL was
+  available.
+- [ ] Reviewed Adapter-supported projected conservative bounds for Autzen
+  EPSG:2992 and SoFi EPSG:32611. Tiles must continue to reject these classes
+  until public Adapter results certify them.
+- [ ] Real/validated vertical-grid coverage, no-data, epoch and transform
+  evidence; larger geographic edge/polar/date-line coverage.
+- [ ] Production live multi-node COPC-to-Tiles request path, including
+  hierarchy completeness, geometric error, sparse nodes, subtrees, bounded
+  queues and cancellation.
+- [ ] Live multi-node Cesium and Three refinement, same bytes, camera movement,
+  source switching and cleanup. The current real Autzen renderer wrapper is
+  one node only.
+- [ ] Broader malformed data/Range, File/Blob, real Extra Bytes, full A/E cache,
+  peak temporary memory, retained browser memory, and browser/platform tests.
+- [ ] T12 comparison of Direct, on-demand Tiles and pre-generated Tiles with
+  comparable datasets/camera paths and both supported distribution models.
 
 ## Distribution and publication gate
 
-- [ ] Compare an optional Adapter `/tiles` subpath with a separately published
-  Tiles package from a shared monorepo using packed install and runtime graphs,
-  renderer dependencies, API compatibility and release overhead. A naive
-  Adapter tarball containing Tiles files fails the current Adapter-only
-  install-isolation requirement. Keep the eventual distribution decision open
-  until a compliant package design is measured.
-- [ ] Maintainer approves package scope, version, README examples, changelog,
-  provenance and release workflow.
-- [ ] Run final packed consumer checks after all accepted changes. Do not merge,
-  publish, release or close issues without explicit maintainer approval.
+- [ ] Compare optional Adapter `/tiles` and standalone `@frillab/copc-tiles`
+  using packed install footprint, lockfile dependency graph, runtime bundles,
+  renderer dependencies, compatibility and release overhead.
+- [ ] Maintainer review approves scope, package version, documentation,
+  changelog and release workflow.
+- [ ] Final maintainer approval before merge, publish, release or issue closure.
 
-The candidate package targets Node `>=18`. This pass used Node `26.12.1`.
-Normal `npm ci` failed to build development-only `better-sqlite3@11.10.0` in
-this environment; `npm ci --ignore-scripts` followed by the documented Sharp
-rebuild enabled the test suite. See
-[`implementation-status.md`](implementation-status.md) for complete commands
-and limitations.
+Adapter 0.7.1 compatibility and strict NodeNext are verified. The package
+remains `0.1.0`; release readiness is **CONDITIONAL** because projected source
+bounds and real multi-node Tiles LOD remain incomplete.
 
 **AWAITING MAINTAINER REVIEW**

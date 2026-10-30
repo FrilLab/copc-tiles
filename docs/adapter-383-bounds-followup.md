@@ -1,4 +1,21 @@
-# Proposed Adapter #383 follow-up: conservative transformed cell bounds
+# Historical Adapter #383 API proposal: conservative transformed cell bounds
+
+## Status update — Adapter 0.7.1
+
+This document records the original API gap and proposal. The published
+`@frillab/copc-adapter@0.7.1` now exposes
+`CopcConservativeNodeSource.getConservativeNodeEcefBounds(nodeKey)` from the
+public `/core` subpath. COPC Tiles consumes the exact Registry package and
+preserves supported/unsupported results through its typed connector. The
+Registry integrity, result contract, and evidence are recorded in the
+[compatibility matrix](./adapter-api-compatibility.md).
+
+The public API resolves the integration contract gap for supported geographic
+cells. It intentionally reports projected Autzen EPSG:2992 and SoFi
+EPSG:32611 as `unsupported-horizontal-crs`; those sources still cannot use
+multi-node ECEF bounds. Existing acceptance and validation requirements in
+the proposal remain relevant to evaluating upstream implementation coverage.
+This Tiles work does not change Adapter or update/close upstream issue #383.
 
 ## Blocker
 

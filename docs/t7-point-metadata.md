@@ -37,7 +37,9 @@ does not validate these extension semantics; the CesiumGS validator reports
 zero errors and warnings for the fixture. Cesium and Three.js runtime metadata
 inspection is covered by the browser fixtures. The actual one-node Autzen GLB
 also passed the Khronos validator, and Three.js read its RGB, intensity and
-classification data through the standard GLB/metadata plugins. The packed
-Adapter `/core` candidate accepts exact named Extra Bytes on `copc-js` when the
+classification data through the standard GLB/metadata plugins. The published
+Adapter 0.7.1 `/core` accepts exact named Extra Bytes on `copc-js` when the
 LAS descriptor permits them; Rust/WASM rejects non-empty requests. Real named
-Extra Bytes were not exercised. See the [versioned API matrix](./adapter-api-compatibility.md).
+Extra Bytes were not exercised. SoFi was unavailable in this revalidation;
+prior source attributes are historical and do not count as current evidence.
+See the [versioned API matrix](./adapter-api-compatibility.md).

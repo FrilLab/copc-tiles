@@ -21,6 +21,8 @@ methods:
   hierarchy access.
 - `loadPreparedNodeData(node, fields, { signal, extraDimensions })` for one
   selected node.
+- `getConservativeNodeEcefBounds(nodeKey)` for metadata-only ECEF source-cell
+  bounds where the published Adapter certifies the active transform.
 - `isCurrent(sourceGeneration)` and `close()` for generation and lifecycle
   handling.
 
@@ -32,11 +34,12 @@ node key, source generation, transform generation, immutable transform plan,
 available fields, and the decoded-point ECEF bounds with their documented
 kind. It does not create E from A or rehydrate an Adapter E cache.
 
-Core reports decoded-point bounds only. They may bound the loaded node's point
-content; they are not transformed source-cell bounds for undecoded nodes. The
-connector never substitutes those bounds for a hierarchy cell envelope. This
-keeps full multi-node culling and LOD as an explicit T5/T9/T10 limitation until
-a conservative cell-bound policy exists.
+Adapter reports decoded-point bounds and a separate conservative source-cell
+result. The connector checks source cell, node, source identity/generations,
+and transform-plan identity. The result is metadata-only and does not issue
+point or network reads. It preserves an explicit unsupported reason without
+fallback. Projected Autzen EPSG:2992 and EPSG:32611 still cannot provide a
+Tiles bound, so multi-node culling and LOD remain limited for those sources.
 
 ## Limits and failure handling
 
@@ -58,12 +61,12 @@ aborts its local requests; it closes the Core context only when it owns it.
 | Issue #2 criterion | Evidence / status |
 | --- | --- |
 | Requested keys without Direct scheduler | Implemented in `src/source/tileNodeReader.ts`; repository scan shows no `NodeSelector` or `StreamingManager` imports in the Tiles connector. |
-| Lazy hierarchy pages and bounded traversal | Fixture tests cover early stop, page limits, incomplete hierarchy, unsafe ranges, and missing nodes. Real Autzen and SoFi hierarchy reads passed without full object downloads. |
+| Lazy hierarchy pages and bounded traversal | Fixture tests cover early stop, page limits, incomplete hierarchy, unsafe ranges, and missing nodes. Current Autzen hierarchy reads pass without full object downloads. A prior SoFi run is recorded in the 2026-10-29 release audit; SoFi was unavailable in this revalidation. |
 | Deduplicate node requests | Duplicate keys in one batch collapse to one point preparation; cross-call resource deduplication remains a T8 provider responsibility. |
 | Public prepared data path | Uses `CopcNodeSource.loadPreparedNodeData()` for all nodes. No `/cesium` fallback, copied decoder, point buffer rehydration, or duplicate CRS code. |
 | Cancellation and source lifecycle | Unit tests assert signals reach hierarchy and point methods, connector close aborts local work, owned context close is idempotent, and stale generations are rejected. |
-| Actual attributes and precise coordinates | Both datasets return position/intensity/classification on both backends; Autzen also returns RGB while SoFi omits absent RGB. ECEF stays the exact Adapter Float64 buffer. |
-| Packed package contract | Adapter candidate was packed from `c5b563b3d0c5743b8030a79eca8c820421c9d4a7` and installed by tarball path in a clean consumer. Node ESM and strict Bundler-mode declarations passed. Strict NodeNext exposes upstream TS2834 declaration errors; see the compatibility matrix. |
+| Actual attributes and precise coordinates | Current Autzen returns position/intensity/classification/RGB on both backends; ECEF stays the exact Adapter Float64 buffer. SoFi was unavailable this revalidation. |
+| Packed package contract | The actual Registry Adapter 0.7.1 tarball and packed Tiles artifact pass Node ESM, strict Bundler and strict NodeNext consumers. |
 
 ## Real browser evidence
 
@@ -78,16 +81,15 @@ backends in Chromium:
 - Both outputs passed Khronos glTF and CesiumGS 3D Tiles validators without
   errors/warnings and rendered in Cesium and Three.
 
-The SoFi tests passed with both `copc-js` and Rust/WASM: the first hierarchy
-response contained 2,599 nodes and 111 child-page references; three selected
-nodes at levels 2–4 loaded with exact hierarchy point counts. `copc-js` used
-8 Range GETs / 422,669 bytes; Rust/WASM used 9 / 359,053 bytes, including
-test-harness repeats. The browser could not read `Content-Range`, so both
-used Adapter's `head-fallback` policy.
+SoFi was unavailable for this milestone: no binary or `COPC_TILES_SOFI_URL` /
+`COPC_TILES_SECOND_COPC_URL` was configured, and both optional real-source
+browser cases were skipped. A previous run recorded SoFi hierarchy and
+three-node reads in [`release-audit-2026-10-29.md`](./release-audit-2026-10-29.md);
+that is historical evidence, not a result of this revalidation.
 
 No File/Blob, real named Extra Bytes, explicit vertical grid,
 complete octree, or production multi-node LOD result is claimed. The public
-Adapter candidate supports configured Extra Bytes on `copc-js`; Rust/WASM
+Adapter 0.7.1 supports configured Extra Bytes on `copc-js`; Rust/WASM
 rejects non-empty Extra Bytes requests. See the
 [API compatibility matrix](./adapter-api-compatibility.md).
 
@@ -95,17 +97,13 @@ rejects non-empty Extra Bytes requests. See the
 
 The public renderer-neutral source methods, node/page types, source and
 transform generations, cancellation, and A-shaped point preparation are now
-available in the packed candidate and exercised by Tiles. Remaining notes for
-[Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383):
+available in the published Registry 0.7.1 package and exercised by Tiles.
+Adapter issue [#383](https://github.com/mors119/copc-adapter/issues/383) is
+unchanged by this Tiles work:
 
-1. Publish a release with `/core`; the immutable npm `0.6.0` artifact does not
-   include this API, although the source-built candidate's manifest says
-   `0.6.0`.
-2. Fix declaration imports so strict `NodeNext` consumers can typecheck the
-   packed `/core` entry.
-3. If full Tiles traversal needs culling before point decode, review a minimal
-   Adapter-owned conservative transformed-cell-bound contract. Tiles will not
-   treat the current decoded-point `ecefBounds` as that bound.
-4. No read-only E cache view is exposed. This is not required for the A
+1. The 0.7.1 public conservative-bounds method reports tested projected
+   sources as unsupported; projected support must remain an Adapter-owned
+   enhancement with its own proof and validation.
+2. No read-only E cache view is exposed. This is not required for the A
    baseline; if Tiles later uses E, expose retained ECEF Float64 and prepared
    height Float64 through a narrow public view instead of rehydrating A.

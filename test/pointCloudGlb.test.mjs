@@ -7,6 +7,7 @@ import validator from 'gltf-validator';
 import tilesValidator from '3d-tiles-validator';
 import { createExperimentalETilePointView } from '../src/input/tilePointView.ts';
 import { encodePointCloudGlb, GlbEncodingError } from '../src/gltf/pointCloudGlb.ts';
+import { createPaddedEcefBoundsFromConservativeResult } from '../src/tileset/explicitTileset.ts';
 
 const context = {
   sourceIdentity: 'glb-fixture',
@@ -82,6 +83,79 @@ test('writes a deterministic glTF 2.0 POINTS GLB with aligned chunks and correct
   const firstPosition = Array.from({ length: 3 }, (_, axis) => new DataView(encoded.bytes.buffer).getFloat32(binaryStart + axis * 4, true));
   assert.ok(firstPosition.every(Number.isFinite));
   assert.deepEqual(encoded.bytes, encodePointCloudGlb(pointView({ points })).bytes);
+});
+
+test('pads a supported source-cell bound by the GLB encoder measured Float32 reconstruction error', () => {
+  const points = [
+    [6_378_137.123456789, -40.123456789, 20.7654321],
+    [6_378_137.987654321, 40.987654321, 21.2345679],
+  ];
+  const encoded = encodePointCloudGlb(pointView({ points }));
+  assert.ok(encoded);
+  const conservative = {
+    nodeKey: 'geographic-fixture',
+    sourceCellBounds: { minX: -0.001, minY: -0.001, minZ: 0, maxX: 0.001, maxY: 0.001, maxZ: 30 },
+    sourceCoordinateSystem: 'copc-source',
+    sourceIdentity: 'fixture-source',
+    sourceGeneration: 1,
+    transformGeneration: 1,
+    transformPlanIdentity: 'fixture-plan',
+    heightOffsetMeters: 0,
+    status: 'supported',
+    boundsEcef: {
+      coordinateSystem: 'wgs84-ecef-meters',
+      minX: 6_378_130, minY: -50, minZ: 0,
+      maxX: 6_378_150, maxY: 50, maxZ: 30,
+    },
+    coverage: 'full-source-cell-and-descendant-cells',
+    method: 'wgs84-geodetic-interval-v1',
+    verification: 'analytic-interval',
+    verticalReference: 'ellipsoidal',
+    sourceVerticalUnitToMeters: 1,
+    encoderErrorPaddingRequired: true,
+    assumptions: ['fixture'],
+  };
+  const padded = createPaddedEcefBoundsFromConservativeResult(conservative, encoded.maxAbsoluteErrorMeters);
+  assert.ok(encoded.maxAbsoluteErrorMeters > 0);
+  for (let axis = 0; axis < 3; axis += 1) {
+    assert.equal(padded.minimum[axis], conservative.boundsEcef[['minX', 'minY', 'minZ'][axis]] - encoded.maxAbsoluteErrorMeters);
+    assert.equal(padded.maximum[axis], conservative.boundsEcef[['maxX', 'maxY', 'maxZ'][axis]] + encoded.maxAbsoluteErrorMeters);
+  }
+
+  const { json, view, binaryStart } = parseGlb(encoded.bytes);
+  const positions = json.accessors[0];
+  const byteOffset = json.bufferViews[positions.bufferView].byteOffset + positions.byteOffset;
+  for (let point = 0; point < points.length; point += 1) {
+    const offset = binaryStart + byteOffset + point * 12;
+    const local = [
+      view.getFloat32(offset, true),
+      -view.getFloat32(offset + 8, true),
+      view.getFloat32(offset + 4, true),
+    ];
+    const reconstructed = local.map((component, axis) => encoded.originEcef[axis] + component);
+    for (let axis = 0; axis < 3; axis += 1) {
+      assert.ok(reconstructed[axis] >= padded.minimum[axis]);
+      assert.ok(reconstructed[axis] <= padded.maximum[axis]);
+      assert.ok(Math.abs(reconstructed[axis] - points[point][axis]) <= encoded.maxAbsoluteErrorMeters);
+    }
+  }
+});
+
+test('rejects malformed conservative ECEF bounds before they become Tileset volumes', () => {
+  const malformed = {
+    nodeKey: 'invalid-bound',
+    status: 'supported',
+    encoderErrorPaddingRequired: true,
+    boundsEcef: {
+      coordinateSystem: 'wgs84-ecef-meters',
+      minX: 10, minY: 0, minZ: 0,
+      maxX: 1, maxY: 1, maxZ: 1,
+    },
+  };
+  assert.throws(
+    () => createPaddedEcefBoundsFromConservativeResult(malformed, 0.01),
+    (error) => error.code === 'INVALID_BOUNDS',
+  );
 });
 
 test('preserves full Uint16 LAS RGB as normalized COLOR_0 without narrowing', async () => {

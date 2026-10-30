@@ -5,7 +5,7 @@
 T1 defines an internal, renderer-neutral point view for later Tiles work. Its
 types have no Adapter dependency. The `PreparedPointDataAInput` structural
 shape mirrors the fields consumed from A; a separate compile-time check maps
-the packed candidate's public `/core` declarations to that shape. The Adapter
+the published Registry Adapter 0.7.1 `/core` declarations to that shape. The Adapter
 remains optional for applications that provide another valid source.
 
 The A view reads `PreparedPointData.world.coordinates` and, when explicitly
@@ -24,25 +24,24 @@ type does not import or promise compatibility with Adapter internals.
 
 ## Public Adapter integration and limits
 
-The source-built candidate at Adapter commit
-`c5b563b3d0c5743b8030a79eca8c820421c9d4a7` supplies renderer-neutral
-`createCopcContext()`, `CopcNodeSource`, hierarchy/page methods, cancellation,
-source/transform generations, transform provenance and A-shaped
-`loadPreparedNodeData()`. Tiles consumes those public declarations and aliases
-the returned Float64 ECEF and requested attribute buffers. The immutable
-published npm `0.6.0` artifact does not include `/core`; no released version
-with that contract has been verified.
+The exact published `@frillab/copc-adapter@0.7.1` Registry artifact supplies
+renderer-neutral `createCopcContext()`, `CopcNodeSource`, hierarchy/page
+methods, cancellation, source/transform generations, transform provenance,
+A-shaped `loadPreparedNodeData()`, and the conservative source-cell bounds
+contract. Tiles consumes only public `/core` declarations and aliases the
+returned Float64 ECEF and requested attribute buffers. Registry integrity and
+packed consumer evidence are in the [compatibility matrix](./adapter-api-compatibility.md).
 
 The public contract still has no read-only view of Adapter's experimental E
-cache, so A remains the Tiles baseline and the connector does not reconstruct
-E entries. The candidate's `ecefBounds` is labeled `decoded-point-content`; it
-does not provide conservative transformed bounds for undecoded hierarchy
-cells. Do not import private implementation or infer cell bounds from decoded
-points. These remaining release and bounds questions are recorded for Adapter
-[issue #383](https://github.com/mors119/copc-adapter/issues/383). No Adapter
-files are changed here.
+cache, so A remains the real-source baseline and the connector does not
+reconstruct E entries. `ecefBounds` is labeled `decoded-point-content`; it is
+kept distinct from conservative cell bounds. The 0.7.1 conservative operation
+supports tested geographic cases but rejects projected Autzen EPSG:2992 and
+projected EPSG:32611 as `unsupported-horizontal-crs`. Tiles preserves the
+reason and does not infer bounds from decoded points. No Adapter files are
+changed here.
 
-The candidate supports exact named Extra Bytes requests on `copc-js` where the
+Adapter supports exact named Extra Bytes requests on `copc-js` where the
 LAS descriptor permits them. Rust/WASM rejects non-empty Extra Bytes requests.
 Tiles forwards exact requested names and preserves the returned typed array;
 the unit fixture verifies BigUint64 identity. Real named Extra Bytes were not
@@ -81,17 +80,17 @@ exercised in the browser source tests.
 | Issue #1 criterion | Implementation |
 | --- | --- |
 | Renderer-neutral `TilePointView` and explicit node provenance | `src/input/tilePointView.ts`; `TileNodeContext` is separate from the point arrays. |
-| A-shaped input uses prepared ECEF without copies | `createTilePointViewFromA()` aliases `world.coordinates`; requested Source, Geographic, and attribute buffers are also aliases. The packed candidate compatibility check verifies the shape against public `/core` `CopcPreparedNodeData`. |
+| A-shaped input uses prepared ECEF without copies | `createTilePointViewFromA()` aliases `world.coordinates`; requested Source, Geographic, and attribute buffers are also aliases. The packed Registry compatibility check verifies the shape against public `/core` `CopcPreparedNodeData`. |
 | E uses ECEF / height buffers directly, with optional coordinates | `createExperimentalETilePointView()` aliases the structural input. Public Adapter integration is blocked and documented above. |
 | Explicit field selection and missing-field policy | `TilePointFieldSelection`; requested absent fields throw `TilePointViewError`. |
 | Identity, lengths, BigInt, and stale-generation checks | `test/tilePointView.test.mjs`. |
 
 ## Review limits
 
-This contract does not define a Tiles scheduler, GLB attribute encoding, or
-stable Adapter release range. The E function proves the zero-copy Tiles
-boundary against its declared input shape; it is not evidence that a consumer
-can obtain E data through the public Adapter API. T2 uses only the packed
-candidate's public hierarchy and node-read capabilities. T1 validates coordinate tags,
+This contract does not define a Tiles scheduler or GLB attribute encoding.
+The E function proves the zero-copy Tiles boundary against its declared input
+shape; it is not evidence that a consumer can obtain E data through the public
+Adapter API. T2 uses the packed Registry package's public hierarchy and
+node-read capabilities. T1 validates coordinate tags,
 typed-array classes, lengths, and provenance without scanning every point
 value; T3/T11 must validate numeric finiteness and precision before encoding.

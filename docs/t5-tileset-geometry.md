@@ -20,22 +20,27 @@ bounds.
 
 The module rejects incomplete child discovery, disconnected or cyclic
 hierarchies, invalid octree coordinates, unsafe integers, non-finite or
-non-conservative bounds, and resource-limit violations. The packed Adapter
-`/core` candidate supplies public node/page access, generations, transform
-provenance, and decoded-point ECEF bounds. Those point-content bounds do not
-establish a transformed conservative bound for an undecoded cell. The public
-`getNodeCellBounds()` returns source-CRS bounds; the public point transformer
-does not promise an interval bound when applied to cell corners. Tiles does
-not use either corners or decoded points as an ECEF cell bound.
+non-conservative bounds, and resource-limit violations. Published Adapter
+0.7.1 `/core` supplies public node/page access, generations, transform
+provenance, decoded-point ECEF bounds, and
+`getConservativeNodeEcefBounds(nodeKey)`. That method returns a typed
+supported or unsupported result. Tiles validates its source, transform, and
+cell provenance; unsupported results keep their reason and cannot be used to
+build a bound. Source-cell bounds remain in source CRS, and decoded-point ECEF
+bounds remain limited to loaded content.
 
 The primary Autzen source declares horizontal EPSG:2992 (NAD83 / Oregon GIC
 Lambert, international feet) and vertical EPSG:6360 (NAVD88, US survey feet).
 Its transform plan has no configured vertical grid and marks the vertical
-conversion as a compatibility pass-through. A safe multi-node tileset needs
-the bound to enclose the exact Adapter transform over every point in each
-source cell. The required public operation is proposed in
-[`adapter-383-bounds-followup.md`](./adapter-383-bounds-followup.md). Until
-that API exists, the real Autzen path stops before creating tileset bounds.
+conversion as a compatibility pass-through. Adapter 0.7.1 correctly returns
+`unsupported-horizontal-crs` for this projected source. The real Autzen path
+therefore stops before creating a multi-node tileset bound. Generated
+EPSG:4326 and EPSG:4979 fixtures with explicit ellipsoidal height return
+analytic conservative bounds; an EPSG:4326 fixture with unknown vertical
+reference fails closed. These cases do not establish support for projected
+CRS, every geographic cell, or validated vertical-grid behavior. See the
+[Adapter API compatibility matrix](./adapter-api-compatibility.md) and the
+[historical #383 API proposal](./adapter-383-bounds-followup.md).
 
 Fixture verification:
 
@@ -43,8 +48,10 @@ Fixture verification:
   CesiumGS 3D Tiles Validator against a generated tileset and GLB content.
 - `npm run typecheck` checks the exported TypeScript implementation.
 
-The existing one-node Autzen wrapper uses the Adapter-returned decoded-point
-bounds only for its already-decoded single content node. It is a renderer
-placement check, not evidence for parent/child cell bounds or production LOD.
-The wrapper is not used as a fallback for the missing undecoded-cell bounds.
+For supported geographic fixtures, encoder padding is required and applied
+using the measured maximum Float32 reconstruction error; the result does not
+claim to include that error. The existing one-node Autzen wrapper uses
+decoded-point bounds only for its already-decoded content node. It is a
+renderer placement check, not evidence for projected parent/child cell bounds
+or production LOD. No unsupported result falls back to those point bounds.
 See the [packed API compatibility matrix](./adapter-api-compatibility.md).

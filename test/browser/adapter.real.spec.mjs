@@ -23,6 +23,16 @@ for (const backend of ['copc-js', 'rust']) {
   assert.ok(Number.isSafeInteger(result.adapterTransformGeneration) && result.adapterTransformGeneration >= 0);
   assert.ok(result.transformPlanIdentity.length > 0);
   assert.equal(result.decodedPointBoundsKind, 'decoded-point-content');
+  assert.equal(result.conservativeBounds.status, 'unsupported');
+  assert.equal(result.conservativeBounds.reasonCode, 'unsupported-horizontal-crs');
+  assert.equal(result.conservativeBounds.sourceCellBounds.coordinateSystem, undefined);
+  assert.equal(result.conservativeBounds.sourceCoordinateSystem, 'copc-source');
+  assert.equal(result.conservativeBounds.sourceGeneration, result.adapterSourceGeneration);
+  assert.equal(result.conservativeBounds.transformGeneration, result.adapterTransformGeneration);
+  assert.equal(result.conservativeBounds.transformPlanIdentity, result.transformPlanIdentity);
+  assert.equal(result.conservativeBoundsNetworkRequests, 0);
+  assert.equal(result.sourceHorizontalCrs.authority, 'EPSG');
+  assert.equal(result.sourceHorizontalCrs.code, '2992');
   assert.ok(Number.isSafeInteger(result.metadataPointCount) && result.metadataPointCount > 0);
   assert.equal(result.loadedPointCount, result.nodePointCount);
   assert.equal(result.encodedPointCount, result.nodePointCount);
@@ -69,6 +79,7 @@ for (const backend of ['copc-js', 'rust']) {
   }
 
   console.log(`Autzen real node encoding: Tileset validator errors/warnings=0/0; one decoded COPC node only, not the complete COPC hierarchy or a production LOD tileset.`);
+  console.log(`Autzen conservative bounds: ${result.conservativeBounds.status}/${result.conservativeBounds.reasonCode}; source cell retained in EPSG:2992; bounds evaluation source requests=${result.conservativeBoundsNetworkRequests}.`);
 
   const upload = await page.request.post('/__autzen/upload', {
     data: { tileset: result.tileset, glbBase64: result.glbBase64 },

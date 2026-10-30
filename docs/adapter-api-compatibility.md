@@ -2,72 +2,106 @@
 
 ## Supported published artifact
 
-Tiles supports exactly `@frillab/copc-adapter@0.7.0`. Both the optional peer
-dependency and development dependency use this exact version. No older or
-newer version is claimed compatible.
+This milestone supports exactly `@frillab/copc-adapter@0.7.1`. Both the
+optional peer dependency and development dependency are pinned to that exact
+version. Compatibility with earlier or later releases is not claimed.
 
-The package was verified from npm Registry metadata and its actual packed
-tarball:
+The npm Registry metadata and the actual downloaded Registry tarball were
+checked. The published archive was installed in clean packed consumers.
 
 | Registry field | Value |
 | --- | --- |
-| Latest version | `0.7.0` |
+| Version | `0.7.1` |
 | Public exports | `.`, `./core`, `./cesium`, `./three` |
-| Tarball | `https://registry.npmjs.org/@frillab/copc-adapter/-/copc-adapter-0.7.0.tgz` |
-| `dist.integrity` | `sha512-5HxipG4l8GFSMls3xEtZP2uixrlvXoAyjzkA9/wjkXx3lTF7d5fU8g/Q5uBJaNJ5gKxJNobduf7kvTVJ8sMIDg==` |
-| `dist.shasum` | `f773f4e271c252ace1746773410815c7694eab77` |
-| npm `gitHead` | `211f9a80f5dd53d084ddb21da033c1f6ad572421` |
-| Packed / unpacked | 638,050 bytes / approximately 2.3 MB, 124 files |
+| Tarball | [`copc-adapter-0.7.1.tgz`](https://registry.npmjs.org/@frillab/copc-adapter/-/copc-adapter-0.7.1.tgz) |
+| `dist.integrity` | `sha512-apm67tKwhOr41elWw845NaYJrMsz74oXWtD7ZEMntLkUaFhos0uM/EMsVBNOEwXg77JjN363hQi70hTOLD7yJQ==` |
+| `dist.shasum` | `03e8f790b8f2627bbfee72c9f9033b5547993dcd` |
+| Packed / unpacked | 646,494 / 2,289,736 bytes; 127 files |
+| Adapter Node engine field | Not declared |
+| Optional renderer peers | `cesium >=1.142.0`, `three >=0.170.0` |
 
-The published `package.json` export map and `dist/core.d.ts` were compared
-with upstream source at the exact npm `gitHead`; the public `packages/core.ts`
-entrypoint exports the same Core types and runtime API. Adapter PR #391 was
-merged at `c5b563b3d0c5743b8030a79eca8c820421c9d4a7`. Tiles does not import or
-copy Adapter source files.
+The declaration files for `/core`, `/cesium`, and `/three` are included in the
+archive. The actual `/core` declarations use `.js` extensions for relative
+declaration imports, fixing the strict NodeNext TS2834/TS2835 failure found in
+the 0.7.0 package.
 
 ## Public contract inventory
 
-| Operation | Public Adapter 0.7.0 API | Data and ownership | Cancellation and lifecycle | Tiles coverage and limits |
+| Operation | Public Adapter 0.7.1 API | Data and ownership | Cancellation and lifecycle | Tiles coverage and limits |
 | --- | --- | --- | --- | --- |
-| Open source | `createCopcContext(input, backend, options)` from `@frillab/copc-adapter/core`; `CopcContext` | Accepts URL, `File`/`Blob`, or public random-access source; backend is explicitly `copc-js` or `rust`. | Context has idempotent `close()` and lifetime `sourceGeneration`. | Installed-package ESM import and both real HTTP backends pass. File/Blob has not been tested in Tiles. |
-| Read source metadata | `CopcNodeSource.getMetadata()`; `CopcMetadata` | Includes source-space bounds/cube and CRS evidence. Connector returns a recursively copied and frozen metadata value; it does not relabel source bounds. | Connector checks source freshness before reading. | Connector unit test covers defensive copy/freeze and source-coordinate semantics. |
-| Traverse hierarchy | `getRootHierarchyPage()`, `loadHierarchyPage(page, { signal })`; `CopcHierarchyNode`, `CopcHierarchyPage` | Page/node records include hierarchy key, node level/coordinates, point count/range, known child keys and completeness. Cell coordinates remain source CRS/units. | Page requests accept `AbortSignal`; closing the source invalidates pending work/results. | Autzen selected reads and SoFi page read pass. A complete production hierarchy-to-Tileset route is not implemented. |
-| Read a cell bound | `CopcNodeSource.getNodeCellBounds(nodeKey)`; `CopcHierarchyBounds` | Bounds are in COPC source axes and CRS units. Connector returns a separate frozen value. | Source generation applies. | Never treated as an ECEF or 3D Tiles bound. |
-| Prepare one node | `loadPreparedNodeData(node, fields, options)`; `CopcPreparedNodeData` | A-shaped `PreparedPointData` contains source/geographic/ECEF Float64 coordinates plus only actual requested fields. Adapter-owned typed arrays are read-only by contract and may be retained; connector aliases ECEF/attribute buffers. | Per-call signal and source close reject stale results. Synchronous `copc-js` decoding may finish before rejection; backend physical cancellation is not guaranteed. | Autzen and SoFi node count/attributes tested on both backends. |
-| Select fields / Extra Dimensions | `CopcPointFieldSelection`, `CopcPointField`, and `extraDimensions` option; result `availableFields` and `availableExtraDimensions` | Exact case-sensitive Extra Dimension names and supported `Float64Array`, `BigInt64Array`, or `BigUint64Array` values are preserved. Missing values are omitted, never zero-filled. | Uses the same request signal and generation checks. | Real RGB/intensity/classification coverage tested. Real Extra Bytes not tested; Rust/WASM rejects non-empty Extra Dimension requests. |
-| Preserve transform evidence | `sourceGeneration`, `transformGeneration`, `transformPlan`, `isCurrent()` on `CopcNodeSource`; same provenance on prepared result | Immutable public `CoordinateTransformPlan`; includes CRS/unit/vertical evidence, operations and transform identity. | Source close and generation checks reject stale operations. | Connector exposes plan and validates result identity/generations. No public E-cache view exists. |
-| Bound decoded content | `CopcPreparedNodeData.ecefBounds`, `ecefBoundsKind` | `ecefBoundsKind` is `decoded-point-content`; ECEF bounds enclose only that prepared node's decoded points. | Bound belongs to prepared result generations. | Existing one-node wrapper pads decoded-content bounds by observed Float32 encoding error and minimum tolerance. This does not cover unread content. |
-| Bound an undecoded transformed cell | No public operation in Adapter 0.7.0 | `getNodeCellBounds()` is source-space; decoded `ecefBounds` is not a cell bound. | No bound-specific signal or provenance contract exists. | Blocks safe production multi-node Tilesets for Autzen and arbitrary nonlinear CRS/vertical transforms. The proposed API is in [`adapter-383-bounds-followup.md`](./adapter-383-bounds-followup.md). |
+| Open source | `createCopcContext(input, backend, options)` from `@frillab/copc-adapter/core`; `CopcContext` | Supports the public URL, `File`/`Blob`, and random-access inputs; explicit `copc-js` or `rust` backend. | Context close invalidates the source; source and transform generations identify results. | Public ESM and runtime Core capability verified from the Registry package. HTTP Range integration tested. |
+| Read metadata | `CopcNodeSource.getMetadata()`; `CopcMetadata` | Source-space bounds, point count, and CRS evidence. Tiles returns a defensive immutable copy and preserves source units/labels. | Connector checks current source before returning metadata. | Unit and real Autzen integration coverage. |
+| Traverse hierarchy | `getRootHierarchyPage()`, `loadHierarchyPage(page, { signal })`; public hierarchy page/node types | Lazy page and node records carry keys, coordinates, point ranges/counts, known children, and completeness. | Page load takes an `AbortSignal`; close/stale generations reject work/results. | Requested hierarchy reads covered; production lazy hierarchy-to-tileset route remains incomplete. |
+| Read source cell | `CopcNodeSource.getNodeCellBounds(nodeKey)`; `CopcHierarchyBounds` | Axis-aligned source CRS bounds in source units. | Current source required. | Preserved as source-space bounds and never relabeled ECEF. |
+| Prepare a node | `loadPreparedNodeData(node, fields, options)`; `CopcPreparedNodeData` | A-shaped prepared data exposes adapter-owned typed arrays, including Float64 ECEF and selected available attributes. Tiles aliases read-only buffers. | Per-call signal plus source lifecycle/generation checks. Synchronous decode can finish before an abort is observed; backend physical cancellation is not promised. | Real Autzen node path covered with both backends. SoFi real binary unavailable in this run. |
+| Select attributes | `CopcPointFieldSelection`, `CopcPointField`, and `extraDimensions`; result `availableFields` / `availableExtraDimensions` | Actual returned fields only; exact Extra Dimension names and supported numeric arrays remain adapter-owned/read-only. No zero-filled missing fields. | Same preparation signal and generation checks. | Autzen standard LAS attributes covered. Real Extra Bytes coverage incomplete; Rust rejects non-empty Extra Dimension requests. |
+| Preserve transform evidence | `sourceGeneration`, `transformGeneration`, `transformPlan`, `isCurrent()` on `CopcNodeSource` | Immutable plan identity and source/vertical CRS, unit, height-offset, and grid evidence. | Source close/replacement makes stale results unusable. | Connector checks node/source/transform identity and keeps height/grid provenance. |
+| Read decoded-point bound | `CopcPreparedNodeData.ecefBounds`, `ecefBoundsKind` | `decoded-point-content` bound encloses only decoded point positions in WGS84 ECEF metres. | Bound has the prepared result's generations. | Kept distinct from source-cell and conservative-cell bounds. |
+| Read conservative source-cell bound | `CopcConservativeNodeSource.getConservativeNodeEcefBounds(nodeKey): CopcConservativeBoundsResult` from `/core` | Synchronous, metadata-only result. Supported values include `boundsEcef`, full-cell-and-descendant coverage, analytic verification/method, vertical reference and units, assumptions, and `encoderErrorPaddingRequired: true`. Unsupported values retain `reasonCode`, `reason`, source-cell bounds, source identity/generations, transform-plan identity, height offset, and optional vertical-grid provenance; they have no `boundsEcef`. | No signal parameter. Evaluation performs no point payload reads or network requests. A closed/stale context throws `CopcStaleSourceError`. | Connector validates exact node/source/cell/transform provenance and copies/freezes the result. It rejects malformed or fabricated bounds. Unsupported results cannot build a Tiles bound. |
+
+The published unsupported reason codes are `unsupported-horizontal-crs`,
+`unsupported-horizontal-units`, `unsupported-axis-order`,
+`unsupported-coordinate-epoch`, `unsupported-vertical-reference`,
+`unsupported-vertical-grid`, `vertical-grid-has-nodata-sentinel`,
+`vertical-grid-outside-cell-coverage`, `invalid-source-cell`,
+`unsupported-geographic-cell`, and `numeric-range`. Tiles preserves the exact
+reason code and context.
+
+Conservative bounds report `coverage: 'full-source-cell-and-descendant-cells'`,
+`method: 'wgs84-geodetic-interval-v1'`,
+`verification: 'analytic-interval'`, and WGS84 ECEF metres for supported
+results. Source-cell bounds remain in the source CRS; decoded-point bounds
+remain point-content bounds. The result does not certify GLB Float32
+reconstruction error. Tiles requires a caller-supplied encoder padding value;
+the real GLB test uses the encoder's measured maximum absolute reconstruction
+error and checks reconstructed positions against the padded bounds.
 
 ## Connector behavior
 
-`src/adapter/copcCoreAdapter.ts` is the versioned public connector. It imports
-only `@frillab/copc-adapter/core`, calls `createCopcContext()` and
-`loadPreparedNodeData()`, maps hierarchy records, and requests position plus
-selected fields. It preserves actual field availability, source/node identity,
-transform plan and generation. Prepared ECEF/attribute arrays are aliased into
-the Tiles view; the connector does not decode COPC, transform CRS, reconstruct
-E data, or invoke Direct `NodeSelector`.
+`src/adapter/copcCoreAdapter.ts` imports only the public
+`@frillab/copc-adapter/core` subpath. It uses the public context, metadata,
+hierarchy, node preparation, transform, generation, and conservative bounds
+contracts. It does not import private Adapter files, decode COPC, implement
+Range access, transform CRS, rebuild the E cache, or use Direct `NodeSelector`.
+
+The Tiles Engine remains usable without Adapter installed: its source-neutral
+types contain a structural result contract, and the optional connector lives
+at `@frillab/copc-tiles/adapter/copc-core`.
+
+## Conservative bounds evidence and limits
+
+| Source class | Evidence | Result |
+| --- | --- | --- |
+| EPSG:4326 with explicit ellipsoidal height | Generated validated COPC fixture with a 123.5 m manual height offset; `copc-js` and Rust/WASM | Supported; result preserves the offset and all 11 prepared root-node points are contained; no Range reads during bounds evaluation. |
+| EPSG:4979 with ellipsoidal height | Generated validated COPC fixture; `copc-js` and Rust/WASM | Supported; Adapter transform plan resolves to WGS84 horizontal plus ellipsoidal height; all 11 prepared root-node points contained; no Range reads during bounds evaluation. |
+| EPSG:4326 with unknown vertical reference | Generated COPC fixture; both backends | Explicit `unsupported-vertical-reference`; no ECEF bounds returned. |
+| EPSG:32611 projected | Generated COPC CRS fixture; both backends | Explicit `unsupported-horizontal-crs`; no ECEF bounds returned. |
+| Autzen EPSG:2992 | Real Autzen source; both backends | Explicit `unsupported-horizontal-crs`; no ECEF bounds returned. |
+| SoFi EPSG:32611 | Real SoFi binary not configured/available in this run | Real-source test skipped. Unit contract fixture checks that the unsupported code/reason is preserved and fails closed. |
+
+Connector unit coverage also verifies a manual height offset and validated
+vertical-grid provenance are preserved, checks parent/descendant bound
+containment on contract fixtures, and proves decoded-point bounds remain a
+separate concept. A validated vertical-grid real COPC source and its grid
+coverage/no-data behavior have not been exercised in browser integration.
+Geographic fixtures establish a supported bounds class; they do not establish
+coverage for every geographic cell, epoch, vertical grid, or height policy.
 
 ## Compatibility verification
 
-- `npm run typecheck`, `npm run typecheck:adapter-core`, and package build pass
-  against the installed Registry package.
-- Public `/core` runtime imports pass from the published package. The root
-  Tiles Engine does not import Adapter, Cesium, or Three.
-- Strict TypeScript Bundler-mode checking passes for the packed connector.
-- Strict external `NodeNext` checking fails with TS2834 in Adapter's emitted
-  `dist/core.d.ts`: relative declaration imports omit `.js` extensions. This
-  is an Adapter package declaration issue; Tiles does not rewrite those types.
-- Autzen node `4-11-2-0` (5,122 points) passed single-node validation/rendering
-  in Cesium and Three with both backends. SoFi nodes at levels 2–4 were read
-  and encoded with both backends; only the primary node was rendered. These
-  checks do not demonstrate production multi-node LOD.
-- Clean packed consumers passed for Tiles Engine without Adapter, Tiles with
-  Adapter Core, Tiles with Cesium, Tiles with Three, and Direct Adapter with
-  Cesium without Tiles. Install and bundle sizes are recorded in the PR and
-  current implementation report.
+- Strict packed consumer checks use TypeScript `5.9.3`, `skipLibCheck: false`,
+  strict NodeNext, and strict Bundler resolution. They cover public root,
+  `/core`, `/cesium`, and `/three` type-only imports; runtime ESM imports; and
+  a separate Adapter Core plus Tiles consumer without renderer packages.
+- Runtime and declaration checks passed from the actual installed Registry
+  package. The packed Tiles tarball was installed in clean temporary consumers.
+- Clean installs and type/build/unit checks were verified under Node `18.20.8`
+  and Node `22.23.4`. Node `26.12.1` can run the suite after a local Sharp
+  rebuild, but clean development installation fails while compiling the
+  development-only `better-sqlite3@11.10.0`; see the implementation report.
+  Adapter 0.7.1 itself declares no Node engine range.
+- Real Autzen browser checks run against Chromium. Firefox and WebKit are not
+  part of this evidence.
 
-Adapter Direct `/`, `/cesium`, and `/three` defaults were not changed. Adapter
-issue #383 remains open for the conservative transformed-cell-bounds contract;
-Tiles has not modified upstream code or issues.
+Adapter Direct `.`, `/cesium`, and `/three` were not modified. This Tiles
+change does not change Adapter or close upstream issue #383.

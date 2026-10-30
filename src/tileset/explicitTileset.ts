@@ -1,5 +1,5 @@
 import { createTileTranslationTransform } from '../geometry/tileLocalCoordinates.js';
-import type { TileHierarchyNode } from '../source/tileNodeSource.js';
+import type { TileConservativeBoundsResult, TileHierarchyNode } from '../source/tileNodeSource.js';
 
 export type EcefAxisAlignedBounds = Readonly<{
   minimum: readonly [number, number, number];
@@ -23,17 +23,25 @@ export type ExplicitTilesetErrorCode =
   | 'INCOMPLETE_HIERARCHY'
   | 'INVALID_COVERAGE'
   | 'INVALID_BOUNDS'
-  | 'TILESET_LIMIT';
+  | 'TILESET_LIMIT'
+  | 'UNSUPPORTED_BOUNDS';
 
 export class ExplicitTilesetError extends Error {
   readonly code: ExplicitTilesetErrorCode;
   readonly nodeKey: string | undefined;
+  readonly conservativeBoundsResult: TileConservativeBoundsResult | undefined;
 
-  constructor(code: ExplicitTilesetErrorCode, message: string, nodeKey?: string) {
+  constructor(
+    code: ExplicitTilesetErrorCode,
+    message: string,
+    nodeKey?: string,
+    conservativeBoundsResult?: TileConservativeBoundsResult,
+  ) {
     super(message);
     this.name = 'ExplicitTilesetError';
     this.code = code;
     this.nodeKey = nodeKey;
+    this.conservativeBoundsResult = conservativeBoundsResult;
   }
 }
 
@@ -42,6 +50,61 @@ const HARD_MAX_NODES = 500_000;
 const DEFAULT_MAX_TOTAL_POINTS = 20_000_000;
 const HARD_MAX_TOTAL_POINTS = 100_000_000;
 const MIN_HALF_EXTENT_M = 0.001;
+
+/**
+ * Convert one supported Adapter cell result to a Tileset bound, expanding it
+ * by the encoder's measured maximum ECEF reconstruction error. Pass the
+ * maximum across a node's encoded descendants when preparing hierarchy bounds
+ * so parent/child containment remains true. A zero padding is valid only when
+ * the encoded representation had zero measured error.
+ */
+export function createPaddedEcefBoundsFromConservativeResult(
+  result: TileConservativeBoundsResult,
+  encoderErrorPaddingMeters: number,
+): EcefAxisAlignedBounds {
+  if (!Number.isFinite(encoderErrorPaddingMeters) || encoderErrorPaddingMeters < 0) {
+    throw new ExplicitTilesetError('INVALID_BOUNDS', 'Encoder reconstruction padding must be a finite non-negative number.', result?.nodeKey);
+  }
+  if (!result || result.status !== 'supported') {
+    const unsupported = result as Extract<TileConservativeBoundsResult, { status: 'unsupported' }> | undefined;
+    throw new ExplicitTilesetError(
+      'UNSUPPORTED_BOUNDS',
+      unsupported
+        ? `No conservative ECEF bound is available (${unsupported.reasonCode}): ${unsupported.reason}`
+        : 'A supported conservative ECEF bound is required.',
+      unsupported?.nodeKey,
+      unsupported,
+    );
+  }
+  if (
+    result.encoderErrorPaddingRequired !== true ||
+    !result.boundsEcef || result.boundsEcef.coordinateSystem !== 'wgs84-ecef-meters'
+  ) {
+    throw new ExplicitTilesetError('INVALID_BOUNDS', 'Conservative ECEF bounds are missing their required encoder-padding or coordinate-system certification.', result.nodeKey);
+  }
+  const bounds = result.boundsEcef;
+  const rawCoordinates = [bounds.minX, bounds.minY, bounds.minZ, bounds.maxX, bounds.maxY, bounds.maxZ];
+  if (
+    !rawCoordinates.every(Number.isFinite) ||
+    bounds.minX > bounds.maxX || bounds.minY > bounds.maxY || bounds.minZ > bounds.maxZ
+  ) {
+    throw new ExplicitTilesetError('INVALID_BOUNDS', 'Conservative ECEF bounds must be finite and ordered.', result.nodeKey);
+  }
+  const minimum: [number, number, number] = [
+    bounds.minX - encoderErrorPaddingMeters,
+    bounds.minY - encoderErrorPaddingMeters,
+    bounds.minZ - encoderErrorPaddingMeters,
+  ];
+  const maximum: [number, number, number] = [
+    bounds.maxX + encoderErrorPaddingMeters,
+    bounds.maxY + encoderErrorPaddingMeters,
+    bounds.maxZ + encoderErrorPaddingMeters,
+  ];
+  if (![...minimum, ...maximum].every(Number.isFinite)) {
+    throw new ExplicitTilesetError('INVALID_BOUNDS', 'Padded conservative ECEF bounds exceed the finite numeric range.', result.nodeKey);
+  }
+  return Object.freeze({ minimum: Object.freeze(minimum), maximum: Object.freeze(maximum) });
+}
 
 type ValidNode = Readonly<{
   node: TileHierarchyNode;

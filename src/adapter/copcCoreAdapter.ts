@@ -1,12 +1,13 @@
 import type {
   CopcBackendName,
+  CopcConservativeBoundsResult,
+  CopcConservativeNodeSource,
   CopcContextOptions,
   CopcHierarchyBounds,
   CopcHierarchyNode,
   CopcHierarchyPage,
   CopcInputSource,
   CopcMetadata,
-  CopcNodeSource,
   CopcPointField,
   CopcPreparedNodeData,
   CoordinateTransformPlan,
@@ -23,7 +24,9 @@ import type {
   TileHierarchyNode,
   TileHierarchyPage,
   TileHierarchyPageResult,
-  TileNodeSource,
+  TileConservativeBoundsGridProvenance,
+  TileConservativeBoundsResult,
+  TileConservativeNodeSource,
 } from '../source/tileNodeSource.js';
 
 export type CopcCoreAdapterOptions = Readonly<{
@@ -40,7 +43,7 @@ export type CopcCoreAdapterOptions = Readonly<{
 }>;
 
 export type CopcCoreNodeSourceOptions = Readonly<{
-  source: CopcNodeSource;
+  source: CopcConservativeNodeSource;
   sourceIdentity: string;
   /** Destroy the supplied context on close; defaults to false. */
   ownsSource?: boolean;
@@ -52,7 +55,9 @@ export type CopcCoreAdapterErrorCode =
   | 'INVALID_SOURCE'
   | 'STALE_SOURCE'
   | 'NODE_MISMATCH'
-  | 'INVALID_PREPARED_BOUNDS';
+  | 'INVALID_PREPARED_BOUNDS'
+  | 'MISSING_CONSERVATIVE_BOUNDS_API'
+  | 'INVALID_CONSERVATIVE_BOUNDS';
 
 export class CopcCoreAdapterError extends Error {
   readonly code: CopcCoreAdapterErrorCode;
@@ -71,12 +76,12 @@ export class CopcCoreAdapterError extends Error {
  * It uses the Core source's own hierarchy, selected-node preparation,
  * cancellation, generations and immutable transform plan.
  */
-export class CopcCoreNodeSource implements TileNodeSource {
+export class CopcCoreNodeSource implements TileConservativeNodeSource {
   readonly sourceIdentity: string;
   readonly sourceGeneration: number;
   readonly transformGeneration: number;
   readonly transformPlan: CoordinateTransformPlan;
-  readonly #source: CopcNodeSource;
+  readonly #source: CopcConservativeNodeSource;
   readonly #ownsSource: boolean;
   readonly #isCurrentOverride: (() => boolean) | undefined;
   readonly #lifecycleAbort = new AbortController();
@@ -88,6 +93,12 @@ export class CopcCoreNodeSource implements TileNodeSource {
     }
     if (typeof options.sourceIdentity !== 'string' || options.sourceIdentity.trim() === '') {
       throw new CopcCoreAdapterError('INVALID_SOURCE', 'sourceIdentity must be an opaque non-empty identifier.');
+    }
+    if (typeof options.source.getConservativeNodeEcefBounds !== 'function') {
+      throw new CopcCoreAdapterError(
+        'MISSING_CONSERVATIVE_BOUNDS_API',
+        'Adapter Core 0.7.1 getConservativeNodeEcefBounds(nodeKey) is required for the Tiles Core connector.',
+      );
     }
     if (!Number.isSafeInteger(options.source.sourceGeneration) || options.source.sourceGeneration < 0) {
       throw new CopcCoreAdapterError('INVALID_SOURCE', 'Adapter sourceGeneration must be a non-negative safe integer.');
@@ -128,6 +139,28 @@ export class CopcCoreNodeSource implements TileNodeSource {
       maxY: bounds.maxY,
       maxZ: bounds.maxZ,
     });
+  }
+
+  /**
+   * Return Adapter Core's metadata-only source-cell bound without decoding
+   * point content. Unsupported results retain their reason and provenance;
+   * they are never converted to a decoded-point or guessed ECEF bound.
+   */
+  getConservativeNodeEcefBounds(nodeKey: string): TileConservativeBoundsResult {
+    this.#assertCurrent();
+    if (typeof nodeKey !== 'string' || nodeKey.trim() === '') {
+      throw new CopcCoreAdapterError('INVALID_CONSERVATIVE_BOUNDS', 'A non-empty hierarchy node key is required.');
+    }
+    const result = this.#source.getConservativeNodeEcefBounds(nodeKey);
+    this.#assertCurrent();
+    validateConservativeBoundsResult(
+      result,
+      nodeKey,
+      this.#source,
+      this.sourceGeneration,
+      this.transformGeneration,
+    );
+    return freezeMetadataCopy(result) as TileConservativeBoundsResult;
   }
 
   getRootHierarchyPage(): TileHierarchyPage {
@@ -358,7 +391,7 @@ function createNodeContext(
 function validatePreparedIdentity(
   prepared: CopcPreparedNodeData,
   requestedNode: TileHierarchyNode,
-  source: CopcNodeSource,
+  source: CopcConservativeNodeSource,
   sourceGeneration: number,
   transformGeneration: number,
 ): void {
@@ -377,6 +410,147 @@ function validatePreparedIdentity(
   ) {
     throw new CopcCoreAdapterError('NODE_MISMATCH', 'Adapter preparation returned stale data or mismatched node/source provenance.', requestedNode.key);
   }
+}
+
+const CONSERVATIVE_BOUNDS_REASON_CODES = new Set([
+  'unsupported-horizontal-crs',
+  'unsupported-horizontal-units',
+  'unsupported-axis-order',
+  'unsupported-coordinate-epoch',
+  'unsupported-vertical-reference',
+  'unsupported-vertical-grid',
+  'vertical-grid-has-nodata-sentinel',
+  'vertical-grid-outside-cell-coverage',
+  'invalid-source-cell',
+  'unsupported-geographic-cell',
+  'numeric-range',
+]);
+
+function validateConservativeBoundsResult(
+  result: CopcConservativeBoundsResult,
+  nodeKey: string,
+  source: CopcConservativeNodeSource,
+  sourceGeneration: number,
+  transformGeneration: number,
+): void {
+  if (!isRecord(result)) {
+    throw new CopcCoreAdapterError('INVALID_CONSERVATIVE_BOUNDS', 'Adapter returned a non-object conservative-bounds result.', nodeKey);
+  }
+  const sourceCellBounds = result.sourceCellBounds;
+  const resultGrid = result.verticalGrid;
+  const plannedGrid = source.transformPlan.verticalGrid;
+  if (
+    result.nodeKey !== nodeKey ||
+    result.sourceIdentity !== source.source ||
+    result.sourceGeneration !== sourceGeneration ||
+    result.transformGeneration !== transformGeneration ||
+    result.transformPlanIdentity !== source.transformPlan.identity.key ||
+    result.sourceCoordinateSystem !== 'copc-source' ||
+    result.heightOffsetMeters !== source.transformPlan.manualHeightOffsetMeters ||
+    (resultGrid === undefined) !== (plannedGrid === undefined) ||
+    (resultGrid !== undefined && (
+      !isConservativeBoundsGridProvenance(resultGrid) ||
+      !sameValue(resultGrid, plannedGrid)
+    )) ||
+    !isRecord(sourceCellBounds) ||
+    !validBounds(sourceCellBounds) ||
+    !sameBounds(sourceCellBounds, source.getNodeCellBounds(nodeKey))
+  ) {
+    throw new CopcCoreAdapterError('INVALID_CONSERVATIVE_BOUNDS', 'Adapter conservative bounds have mismatched source, transform, node, or source-cell provenance.', nodeKey);
+  }
+
+  if (result.status === 'supported') {
+    const bounds = result.boundsEcef;
+    if (
+      !isRecord(bounds) ||
+      bounds.coordinateSystem !== 'wgs84-ecef-meters' ||
+      !validBounds(bounds) ||
+      result.coverage !== 'full-source-cell-and-descendant-cells' ||
+      result.method !== 'wgs84-geodetic-interval-v1' ||
+      result.verification !== 'analytic-interval' ||
+      !['ellipsoidal', 'validated-grid'].includes(result.verticalReference as string) ||
+      typeof result.sourceVerticalUnitToMeters !== 'number' ||
+      !Number.isFinite(result.sourceVerticalUnitToMeters) || result.sourceVerticalUnitToMeters <= 0 ||
+      (source.transformPlan.source.verticalUnitConversion?.scaleToMeters !== undefined &&
+        result.sourceVerticalUnitToMeters !== source.transformPlan.source.verticalUnitConversion.scaleToMeters) ||
+      (result.verticalReference === 'validated-grid' &&
+        (resultGrid === undefined || resultGrid.compatibility !== 'validated' || resultGrid.noDataValue !== null)) ||
+      (resultGrid !== undefined &&
+        (resultGrid.compatibility !== 'validated' || resultGrid.noDataValue !== null)) ||
+      result.encoderErrorPaddingRequired !== true ||
+      !Array.isArray(result.assumptions) || result.assumptions.some((assumption) => typeof assumption !== 'string')
+    ) {
+      throw new CopcCoreAdapterError('INVALID_CONSERVATIVE_BOUNDS', 'Adapter returned malformed or uncertified supported ECEF bounds.', nodeKey);
+    }
+    return;
+  }
+
+  if (
+    result.status !== 'unsupported' ||
+    typeof result.reasonCode !== 'string' ||
+    !CONSERVATIVE_BOUNDS_REASON_CODES.has(result.reasonCode) ||
+    typeof result.reason !== 'string' || result.reason.trim() === '' ||
+    'boundsEcef' in result
+  ) {
+    throw new CopcCoreAdapterError('INVALID_CONSERVATIVE_BOUNDS', 'Adapter returned a malformed unsupported conservative-bounds result.', nodeKey);
+  }
+}
+
+function validBounds(value: Record<string, unknown>): boolean {
+  const coordinates = [value.minX, value.minY, value.minZ, value.maxX, value.maxY, value.maxZ];
+  return coordinates.every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate)) &&
+    (value.minX as number) <= (value.maxX as number) &&
+    (value.minY as number) <= (value.maxY as number) &&
+    (value.minZ as number) <= (value.maxZ as number);
+}
+
+function sameBounds(a: Record<string, unknown>, b: CopcHierarchyBounds): boolean {
+  return a.minX === b.minX && a.minY === b.minY && a.minZ === b.minZ &&
+    a.maxX === b.maxX && a.maxY === b.maxY && a.maxZ === b.maxZ;
+}
+
+function isConservativeBoundsGridProvenance(value: unknown): value is TileConservativeBoundsGridProvenance {
+  if (!isRecord(value) || !isRecord(value.longitude) || !isRecord(value.latitude)) return false;
+  const numbers = [
+    value.longitude.min, value.longitude.max,
+    value.latitude.min, value.latitude.max,
+    value.minimumUndulationMeters, value.maximumUndulationMeters,
+  ];
+  return typeof value.id === 'string' && value.id.trim() !== '' &&
+    typeof value.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(value.sha256) &&
+    typeof value.sourceVerticalCrs === 'string' && value.sourceVerticalCrs.trim() !== '' &&
+    value.targetVerticalCrs === 'EPSG:4979' &&
+    value.samplingHorizontalCrs === 'EPSG:4326' &&
+    value.referenceEllipsoid === 'WGS84' &&
+    value.interpolation === 'bilinear' &&
+    typeof value.valueUnit === 'string' && value.valueUnit.trim() !== '' &&
+    value.valueConvention === 'ellipsoidal-minus-orthometric' &&
+    (value.noDataValue === null || (typeof value.noDataValue === 'number' && Number.isFinite(value.noDataValue))) &&
+    Number.isSafeInteger(value.width) && (value.width as number) > 0 &&
+    Number.isSafeInteger(value.height) && (value.height as number) > 0 &&
+    value.longitude.coverage !== undefined &&
+    ['none', 'duplicated-seam', 'periodic'].includes(value.longitude.coverage as string) &&
+    numbers.every((coordinate) => typeof coordinate === 'number' && Number.isFinite(coordinate)) &&
+    (value.longitude.min as number) <= (value.longitude.max as number) &&
+    (value.latitude.min as number) <= (value.latitude.max as number) &&
+    (value.minimumUndulationMeters as number) <= (value.maximumUndulationMeters as number) &&
+    (value.sourceCoordinateEpoch === undefined || (typeof value.sourceCoordinateEpoch === 'number' && Number.isFinite(value.sourceCoordinateEpoch))) &&
+    (value.gridReferenceEpoch === undefined || (typeof value.gridReferenceEpoch === 'number' && Number.isFinite(value.gridReferenceEpoch))) &&
+    (value.compatibility === 'validated' || value.compatibility === 'unsupported') &&
+    (value.compatibilityMessage === undefined || typeof value.compatibilityMessage === 'string');
+}
+
+function sameValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameValue(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  return leftKeys.length === rightKeys.length &&
+    leftKeys.every((key, index) => key === rightKeys[index] && sameValue(left[key], right[key]));
 }
 
 function validateDecodedPointBounds(prepared: CopcPreparedNodeData, nodeKey: string): void {

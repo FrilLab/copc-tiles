@@ -3,6 +3,7 @@ import test from 'node:test';
 import * as adapterCore from '@frillab/copc-adapter/core';
 import { CopcCoreAdapterError, CopcCoreNodeSource, wrapCopcCoreNodeSource } from '../src/adapter/copcCoreAdapter.ts';
 import { TileNodeReader } from '../src/source/tileNodeReader.ts';
+import { createPaddedEcefBoundsFromConservativeResult } from '../src/tileset/explicitTileset.ts';
 
 const node = {
   key: '0-0-0-0', level: 0, x: 0, y: 0, z: 0,
@@ -73,6 +74,7 @@ function makeSource(overrides = {}) {
     getMetadata: () => ({ pointCount: 2, cube: {} }),
     isCurrent: (generation = 17) => current && generation === 17,
     getNodeCellBounds: () => ({ minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 }),
+    getConservativeNodeEcefBounds: (nodeKey) => unsupportedBoundsResult(source, nodeKey),
     getRootHierarchyPage: () => ({ key: 'root', pageOffset: 0, pageLength: 32 }),
     loadHierarchyPage: async () => ({ nodes: [node], pages: [] }),
     loadPreparedNodeData: async () => preparedData(),
@@ -84,6 +86,100 @@ function makeSource(overrides = {}) {
   return source;
 }
 
+function supportedBoundsResult(source, nodeKey, options = {}) {
+  const sourceCellBounds = source.getNodeCellBounds(nodeKey);
+  return {
+    nodeKey,
+    sourceCellBounds,
+    sourceCoordinateSystem: 'copc-source',
+    sourceIdentity: source.source,
+    sourceGeneration: source.sourceGeneration,
+    transformGeneration: source.transformGeneration,
+    transformPlanIdentity: source.transformPlan.identity.key,
+    heightOffsetMeters: source.transformPlan.manualHeightOffsetMeters,
+    ...(options.verticalGrid === undefined ? {} : { verticalGrid: options.verticalGrid }),
+    status: 'supported',
+    boundsEcef: options.boundsEcef ?? {
+      coordinateSystem: 'wgs84-ecef-meters',
+      minX: 6_378_130,
+      minY: -1,
+      minZ: -1,
+      maxX: 6_378_150,
+      maxY: 112,
+      maxZ: 112,
+    },
+    coverage: 'full-source-cell-and-descendant-cells',
+    method: 'wgs84-geodetic-interval-v1',
+    verification: 'analytic-interval',
+    verticalReference: options.verticalReference ?? 'ellipsoidal',
+    sourceVerticalUnitToMeters: options.sourceVerticalUnitToMeters ?? 1,
+    encoderErrorPaddingRequired: true,
+    assumptions: ['validated WGS84 geographic source cell', 'ellipsoidal height interval'],
+  };
+}
+
+function unsupportedBoundsResult(source, nodeKey, reasonCode = 'unsupported-horizontal-crs') {
+  return {
+    nodeKey,
+    sourceCellBounds: source.getNodeCellBounds(nodeKey),
+    sourceCoordinateSystem: 'copc-source',
+    sourceIdentity: source.source,
+    sourceGeneration: source.sourceGeneration,
+    transformGeneration: source.transformGeneration,
+    transformPlanIdentity: source.transformPlan.identity.key,
+    heightOffsetMeters: source.transformPlan.manualHeightOffsetMeters,
+    status: 'unsupported',
+    reasonCode,
+    reason: `Fixture: ${reasonCode}`,
+  };
+}
+
+function geographicPlan(code, options = {}) {
+  const base = preparedData().transformPlan;
+  return {
+    ...base,
+    identity: { key: `geographic-plan-${code}` },
+    source: {
+      ...base.source,
+      horizontalCrs: {
+        authority: 'EPSG', code: String(code), name: code === 4326 ? 'WGS 84' : 'WGS 84 (3D)', certainty: 'explicit',
+      },
+      verticalCrs: options.verticalGrid === undefined
+        ? { authority: 'EPSG', code: '4979', name: 'WGS 84 3D' }
+        : { authority: 'EPSG', code: '5703', name: 'NAVD88 height' },
+      verticalUnits: { kind: 'linear', name: options.verticalUnit ?? 'metre', certainty: 'explicit' },
+      verticalUnitConversion: {
+        scaleToMeters: options.verticalUnit === 'US survey foot' ? 1200 / 3937 : 1,
+        source: 'wkt',
+      },
+    },
+    manualHeightOffsetMeters: options.heightOffsetMeters ?? 0,
+    ...(options.verticalGrid === undefined ? {} : { verticalGrid: options.verticalGrid }),
+  };
+}
+
+function validatedGridProvenance() {
+  return {
+    id: 'fixture-geoid-grid',
+    sha256: 'a'.repeat(64),
+    sourceVerticalCrs: 'EPSG:5703',
+    targetVerticalCrs: 'EPSG:4979',
+    samplingHorizontalCrs: 'EPSG:4326',
+    referenceEllipsoid: 'WGS84',
+    interpolation: 'bilinear',
+    valueUnit: 'metre',
+    valueConvention: 'ellipsoidal-minus-orthometric',
+    noDataValue: null,
+    width: 2,
+    height: 2,
+    longitude: { min: -1, max: 1, coverage: 'none' },
+    latitude: { min: -1, max: 1 },
+    minimumUndulationMeters: -10,
+    maximumUndulationMeters: 12,
+    compatibility: 'validated',
+  };
+}
+
 function wrap(source, overrides = {}) {
   return wrapCopcCoreNodeSource({
     source,
@@ -92,11 +188,185 @@ function wrap(source, overrides = {}) {
   });
 }
 
-test('the installed Adapter 0.7.0 package publishes the renderer-neutral Core exports', () => {
+test('the installed Registry Adapter 0.7.1 package publishes the renderer-neutral Core and conservative-bounds runtime API', () => {
   assert.equal(typeof adapterCore.createCopcContext, 'function');
   assert.equal(typeof adapterCore.CopcContext, 'function');
+  assert.equal(typeof adapterCore.CopcContext.prototype.getConservativeNodeEcefBounds, 'function');
   assert.equal(typeof adapterCore.getCopcHierarchyCellBounds, 'function');
   assert.equal(typeof adapterCore.createCoordinateTransformPlan, 'function');
+});
+
+test('for WGS84 EPSG:4326 and EPSG:4979 fixtures, preserves analytic full-cell bounds and never reads points', () => {
+  for (const code of [4326, 4979]) {
+    let pointReads = 0;
+    let hierarchyReads = 0;
+    let conservativeCalls = 0;
+    const plan = geographicPlan(code);
+    let source;
+    source = makeSource({
+      transformPlan: plan,
+      getConservativeNodeEcefBounds: (nodeKey) => {
+        conservativeCalls += 1;
+        return supportedBoundsResult(source, nodeKey);
+      },
+      loadHierarchyPage: async () => { hierarchyReads += 1; return { nodes: [], pages: [] }; },
+      loadPreparedNodeData: async () => { pointReads += 1; return preparedData(); },
+    });
+    const bridge = wrap(source);
+    const bounds = bridge.getConservativeNodeEcefBounds(node.key);
+
+    assert.equal(bounds.status, 'supported');
+    assert.equal(bounds.coverage, 'full-source-cell-and-descendant-cells');
+    assert.equal(bounds.verification, 'analytic-interval');
+    assert.equal(bounds.boundsEcef.coordinateSystem, 'wgs84-ecef-meters');
+    assert.equal(bounds.sourceCellBounds.minX, 0);
+    assert.equal(bounds.transformPlanIdentity, plan.identity.key);
+    assert.equal(bounds.sourceGeneration, 17);
+    assert.equal(bounds.transformGeneration, 17);
+    assert.equal(bounds.encoderErrorPaddingRequired, true);
+    assert.equal(Object.isFrozen(bounds), true);
+    assert.equal(Object.isFrozen(bounds.boundsEcef), true);
+    assert.equal(pointReads, 0);
+    assert.equal(hierarchyReads, 0);
+    assert.equal(conservativeCalls, 1);
+    bridge.close();
+    assert.equal(code === 4326 || code === 4979, true);
+  }
+});
+
+test('preserves manual height offset and validated vertical-grid dependencies in supported results', () => {
+  const grid = validatedGridProvenance();
+  const plan = geographicPlan(4979, { verticalGrid: grid, heightOffsetMeters: 2.5, verticalUnit: 'US survey foot' });
+  let source;
+  source = makeSource({
+    transformPlan: plan,
+    getConservativeNodeEcefBounds: (nodeKey) => supportedBoundsResult(source, nodeKey, {
+      verticalGrid: grid,
+      verticalReference: 'validated-grid',
+      sourceVerticalUnitToMeters: 1200 / 3937,
+    }),
+  });
+  const result = wrap(source).getConservativeNodeEcefBounds(node.key);
+  assert.equal(result.status, 'supported');
+  assert.equal(result.verticalReference, 'validated-grid');
+  assert.equal(result.heightOffsetMeters, 2.5);
+  assert.equal(result.sourceVerticalUnitToMeters, 1200 / 3937);
+  assert.deepEqual(result.verticalGrid, grid);
+  assert.equal(result.verticalGrid.compatibility, 'validated');
+});
+
+test('rejects conservative bounds whose vertical unit or validated grid differs from the active transform plan', () => {
+  const grid = validatedGridProvenance();
+  const plan = geographicPlan(4979, { verticalGrid: grid, verticalUnit: 'US survey foot' });
+  for (const mismatch of [
+    { verticalGrid: { ...grid, sha256: 'b'.repeat(64) }, sourceVerticalUnitToMeters: 1200 / 3937 },
+    { verticalGrid: grid, sourceVerticalUnitToMeters: 1 },
+    { verticalGrid: undefined, sourceVerticalUnitToMeters: 1200 / 3937 },
+  ]) {
+    let source;
+    source = makeSource({
+      transformPlan: plan,
+      getConservativeNodeEcefBounds: (nodeKey) => supportedBoundsResult(source, nodeKey, {
+        verticalGrid: mismatch.verticalGrid,
+        verticalReference: 'validated-grid',
+        sourceVerticalUnitToMeters: mismatch.sourceVerticalUnitToMeters,
+      }),
+    });
+    assert.throws(
+      () => wrap(source).getConservativeNodeEcefBounds(node.key),
+      (error) => error instanceof CopcCoreAdapterError && error.code === 'INVALID_CONSERVATIVE_BOUNDS',
+    );
+    source.close();
+  }
+});
+
+test('keeps parent conservative bounds around descendant cells and keeps source-cell, ECEF-cell, and decoded-point bounds distinct', async () => {
+  const child = {
+    key: '1-0-0-0', level: 1, x: 0, y: 0, z: 0,
+    pointCount: 1, pointDataOffset: 168, pointDataLength: 20,
+    children: [], childrenComplete: true,
+  };
+  const sourceCells = {
+    [node.key]: { minX: -0.001, minY: -0.001, minZ: 0, maxX: 0.001, maxY: 0.001, maxZ: 10 },
+    [child.key]: { minX: 0, minY: 0, minZ: 1, maxX: 0.001, maxY: 0.001, maxZ: 5 },
+  };
+  const ecefBounds = {
+    [node.key]: { coordinateSystem: 'wgs84-ecef-meters', minX: 6_378_130, minY: -1, minZ: -1, maxX: 6_378_150, maxY: 112, maxZ: 112 },
+    [child.key]: { coordinateSystem: 'wgs84-ecef-meters', minX: 6_378_132, minY: 10, minZ: 20, maxX: 6_378_146, maxY: 90, maxZ: 100 },
+  };
+  let source;
+  source = makeSource({
+    getNodeCellBounds: (key) => sourceCells[key],
+    getConservativeNodeEcefBounds: (key) => supportedBoundsResult(source, key, { boundsEcef: ecefBounds[key] }),
+  });
+  const bridge = wrap(source);
+  const parentBounds = bridge.getConservativeNodeEcefBounds(node.key);
+  const childBounds = bridge.getConservativeNodeEcefBounds(child.key);
+  assert.equal(parentBounds.status, 'supported');
+  assert.equal(childBounds.status, 'supported');
+  assert.ok(childBounds.boundsEcef.minX >= parentBounds.boundsEcef.minX);
+  assert.ok(childBounds.boundsEcef.maxX <= parentBounds.boundsEcef.maxX);
+  assert.ok(childBounds.boundsEcef.minY >= parentBounds.boundsEcef.minY);
+  assert.ok(childBounds.boundsEcef.maxY <= parentBounds.boundsEcef.maxY);
+  assert.ok(childBounds.boundsEcef.minZ >= parentBounds.boundsEcef.minZ);
+  assert.ok(childBounds.boundsEcef.maxZ <= parentBounds.boundsEcef.maxZ);
+  assert.deepEqual(bridge.getNodeCellBounds(node.key), sourceCells[node.key]);
+  const pointView = await bridge.loadNode(node, {});
+  assert.equal(pointView.context.decodedPointEcefBoundsKind, 'decoded-point-content');
+  assert.notDeepEqual(pointView.context.decodedPointEcefBounds, parentBounds.boundsEcef);
+  bridge.close();
+});
+
+test('preserves explicit unsupported results for Autzen and SoFi projected CRS without inventing bounds', () => {
+  for (const [code, sourceName] of [[2992, 'Autzen'], [32611, 'SoFi']]) {
+    let pointReads = 0;
+    const plan = geographicPlan(code);
+    let source;
+    source = makeSource({
+      transformPlan: plan,
+      getConservativeNodeEcefBounds: (nodeKey) => unsupportedBoundsResult(source, nodeKey),
+      loadPreparedNodeData: async () => { pointReads += 1; return preparedData(); },
+    });
+    const bridge = wrap(source);
+    const result = bridge.getConservativeNodeEcefBounds(node.key);
+    assert.equal(result.status, 'unsupported', sourceName);
+    assert.equal(result.reasonCode, 'unsupported-horizontal-crs', sourceName);
+    assert.match(result.reason, /unsupported-horizontal-crs/);
+    assert.equal(result.sourceIdentity, source.source);
+    assert.equal(result.sourceGeneration, source.sourceGeneration);
+    assert.equal(result.transformPlanIdentity, plan.identity.key);
+    assert.equal('boundsEcef' in result, false);
+    assert.equal(pointReads, 0);
+    assert.throws(
+      () => createPaddedEcefBoundsFromConservativeResult(result, 0),
+      (error) => error.code === 'UNSUPPORTED_BOUNDS' && error.conservativeBoundsResult === result,
+    );
+    bridge.close();
+  }
+});
+
+test('fails closed for a missing or mismatched conservative bounds API and a stale source', () => {
+  const oldSource = makeSource({ getConservativeNodeEcefBounds: undefined });
+  assert.throws(
+    () => wrap(oldSource),
+    (error) => error instanceof CopcCoreAdapterError && error.code === 'MISSING_CONSERVATIVE_BOUNDS_API',
+  );
+  let source;
+  source = makeSource({
+    getConservativeNodeEcefBounds: (nodeKey) => ({
+      ...supportedBoundsResult(source, nodeKey),
+      transformPlanIdentity: 'stale-plan',
+    }),
+  });
+  assert.throws(
+    () => wrap(source).getConservativeNodeEcefBounds(node.key),
+    (error) => error instanceof CopcCoreAdapterError && error.code === 'INVALID_CONSERVATIVE_BOUNDS',
+  );
+  source.setCurrent(false);
+  assert.throws(
+    () => wrap(source).getConservativeNodeEcefBounds(node.key),
+    (error) => error instanceof CopcCoreAdapterError && error.code === 'STALE_SOURCE',
+  );
 });
 
 test('exposes immutable source metadata, source-space cell bounds, and the Adapter transform plan', () => {
