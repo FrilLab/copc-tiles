@@ -1,9 +1,9 @@
 import {
-  copcJsBackend,
+  createCopcContext,
   createCopcPointFieldSelection,
-} from '@frillab/copc-adapter/cesium';
+} from '@frillab/copc-adapter/core';
 import { encodePointCloudGlb } from '../../src/gltf/pointCloudGlb.ts';
-import { createCopcJsAdapterNodeSource } from '../../src/adapter/copcJsAdapter.ts';
+import { CopcCoreNodeSource } from '../../src/adapter/copcCoreAdapter.ts';
 import { TileNodeReader } from '../../src/source/tileNodeReader.ts';
 
 const MAX_NODE_POINTS = 8192;
@@ -16,6 +16,25 @@ function toBase64(bytes) {
     binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + blockSize, bytes.byteLength)));
   }
   return btoa(binary);
+}
+
+function retainedPointBufferBytes(view) {
+  const buffers = new Set();
+  const add = (value) => {
+    if (ArrayBuffer.isView(value)) buffers.add(value.buffer);
+  };
+  add(view.ecef);
+  add(view.preparedHeight);
+  add(view.source);
+  add(view.geographic);
+  for (const value of Object.values(view.attributes ?? {})) {
+    if (value && typeof value === 'object' && !ArrayBuffer.isView(value)) {
+      for (const extra of Object.values(value)) add(extra);
+    } else {
+      add(value);
+    }
+  }
+  return [...buffers].reduce((total, buffer) => total + buffer.byteLength, 0);
 }
 
 window.startRealAdapterIntegration = async (options = {}) => {
@@ -44,7 +63,7 @@ window.startRealAdapterIntegration = async (options = {}) => {
   let source;
   let connector;
   try {
-    source = await copcJsBackend.open(sourceUrl, {
+    source = await createCopcContext(sourceUrl, options.backend ?? 'copc-js', {
       rangeValidation,
       maxRangeBytes: MAX_NODE_BYTES,
       maxConcurrentRangeRequests: 2,
@@ -71,7 +90,7 @@ window.startRealAdapterIntegration = async (options = {}) => {
       if (!page || seenPages.has(page.key)) continue;
       seenPages.add(page.key);
       hierarchyPagesRead += 1;
-      const result = await source.loadHierarchyPage(page);
+      const result = await source.loadHierarchyPage(page, { signal: options.signal });
       hierarchyNodeCount += result.nodes.length;
       hierarchyChildPageRefs += result.pages.length;
       for (const item of result.nodes) hierarchyLevelCounts[item.level] = (hierarchyLevelCounts[item.level] ?? 0) + 1;
@@ -93,9 +112,9 @@ window.startRealAdapterIntegration = async (options = {}) => {
     const node = selectedNodes[0];
 
     stageStartedAt = performance.now();
-    const availableView = await source.loadPointDataView(node, fields);
+    const availablePrepared = await source.loadPreparedNodeData(node, fields, { signal: options.signal });
     const publicViewMilliseconds = performance.now() - stageStartedAt;
-    const availableFields = availableView.availableFields;
+    const availableFields = availablePrepared.availableFields;
     if (!availableFields.has('position')) throw new Error('The actual COPC point view lacks positions.');
     const attributeSelection = {
       ...(availableFields.has('rgb') ? { rgb: true } : {}),
@@ -103,24 +122,15 @@ window.startRealAdapterIntegration = async (options = {}) => {
       ...(availableFields.has('classification') ? { classification: true } : {}),
     };
     const availableSamples = {
-      intensity: availableFields.has('intensity') ? availableView.getter('intensity')(0) : null,
-      classification: availableFields.has('classification') ? availableView.getter('classification')(0) : null,
-      red: availableFields.has('rgb') ? availableView.getter('red')(0) : null,
-      green: availableFields.has('rgb') ? availableView.getter('green')(0) : null,
-      blue: availableFields.has('rgb') ? availableView.getter('blue')(0) : null,
+      intensity: availablePrepared.pointData.attributes?.intensity?.[0] ?? null,
+      classification: availablePrepared.pointData.attributes?.classification?.[0] ?? null,
+      red: availablePrepared.pointData.attributes?.red?.[0] ?? null,
+      green: availablePrepared.pointData.attributes?.green?.[0] ?? null,
+      blue: availablePrepared.pointData.attributes?.blue?.[0] ?? null,
     };
-    const sourceCrs = metadata.wkt
-      ? { status: 'unverified', definition: metadata.wkt, reason: 'The Tiles connector preserves source WKT but does not independently validate its axis/unit interpretation.' }
-      : { status: 'unknown', reason: 'The Adapter public metadata did not provide a WKT definition.' };
-    connector = await createCopcJsAdapterNodeSource({
+    connector = new CopcCoreNodeSource({
       source,
       sourceIdentity,
-      transformGeneration: 1,
-      provenanceForNode: () => ({
-        sourceCrs,
-        verticalDatum: { status: 'unknown', reason: 'No independently validated vertical datum correction was supplied.', corrections: [] },
-        heightOffsetMeters: source.preparedHeightOffsetMeters ?? 0,
-      }),
       ownsSource: false,
     });
     const reader = new TileNodeReader(connector, {
@@ -158,25 +168,29 @@ window.startRealAdapterIntegration = async (options = {}) => {
         hierarchyPointCount: selected.pointCount,
         loadedPointCount: selectedView?.pointCount ?? null,
         encodedPointCount: selectedGlb?.pointCount ?? null,
+        retainedPointBufferBytes: selectedView ? retainedPointBufferBytes(selectedView) : null,
         identityMatches: selectedView?.context.nodeKey === selected.key,
         glbBytes: selectedGlb?.bytes.byteLength ?? null,
       };
     });
     const origin = encoded.originEcef;
-    const halfExtents = [0, 0, 0];
-    for (let index = 0; index < view.ecef.length; index += 3) {
-      for (let axis = 0; axis < 3; axis += 1) {
-        const local = Math.abs(view.ecef[index + axis] - origin[axis]);
-        halfExtents[axis] = Math.max(halfExtents[axis], local);
-      }
+    const decodedPointBounds = view.context.decodedPointEcefBounds;
+    if (!decodedPointBounds || view.context.decodedPointEcefBoundsKind !== 'decoded-point-content') {
+      throw new Error('Adapter did not return a documented decoded-point ECEF bound for the non-empty node.');
     }
+    const boundMin = [decodedPointBounds.minX, decodedPointBounds.minY, decodedPointBounds.minZ];
+    const boundMax = [decodedPointBounds.maxX, decodedPointBounds.maxY, decodedPointBounds.maxZ];
+    const halfExtents = boundMin.map((minimum, axis) => Math.max(
+      Math.abs(minimum - origin[axis]),
+      Math.abs(boundMax[axis] - origin[axis]),
+    ));
     for (let axis = 0; axis < 3; axis += 1) {
       halfExtents[axis] = Math.max(halfExtents[axis] + encoded.maxAbsoluteErrorMeters, 0.01);
     }
     let pointsInsideBounds = true;
     for (let index = 0; index < view.ecef.length; index += 3) {
       for (let axis = 0; axis < 3; axis += 1) {
-        if (Math.abs(view.ecef[index + axis] - origin[axis]) > halfExtents[axis]) pointsInsideBounds = false;
+        if (view.ecef[index + axis] < boundMin[axis] || view.ecef[index + axis] > boundMax[axis]) pointsInsideBounds = false;
       }
     }
     const box = [
@@ -201,7 +215,11 @@ window.startRealAdapterIntegration = async (options = {}) => {
     const glbBase64 = toBase64(encoded.bytes);
     const base64ConversionMilliseconds = performance.now() - stageStartedAt;
     return {
-      adapterVersion: '0.6.0',
+      adapterBackend: options.backend ?? 'copc-js',
+      adapterSourceGeneration: view.context.sourceGeneration,
+      adapterTransformGeneration: view.context.transformGeneration,
+      transformPlanIdentity: view.context.transformPlan.identity.key,
+      decodedPointBoundsKind: view.context.decodedPointEcefBoundsKind,
       sourceRequests,
       pipelineTimingsMilliseconds: {
         sourceOpen: sourceOpenMilliseconds,
@@ -235,6 +253,8 @@ window.startRealAdapterIntegration = async (options = {}) => {
       hierarchyChildPageRefs,
       hierarchyLevelCounts,
       multiNodeSummary,
+      multiNodeRetainedPointBufferBytes: [...views.values()].reduce((total, selectedView) => total + retainedPointBufferBytes(selectedView), 0),
+      multiNodeEncodedGlbBytes: multiNodeSummary.reduce((total, item) => total + (item.glbBytes ?? 0), 0),
       encodedPointCount: encoded.pointCount,
       encodedMetadataProperties: encoded.metadataProperties,
       originEcef: origin,
@@ -249,7 +269,7 @@ window.startRealAdapterIntegration = async (options = {}) => {
     throw new Error(message.replace(/https?:\/\/[^\s"'<>]+/gi, '[redacted URL]'));
   } finally {
     connector?.close();
-    source?.destroy?.();
+    source?.close();
     window.fetch = nativeFetch;
   }
 };

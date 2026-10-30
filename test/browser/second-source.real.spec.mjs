@@ -8,7 +8,8 @@ import validator from 'gltf-validator';
 import tilesValidator from '3d-tiles-validator';
 import { resetServerStats } from './browser-utils.mjs';
 
-test('optional second real COPC: bounded public Adapter read, encode, validate and render', async ({ page }) => {
+for (const backend of ['copc-js', 'rust']) {
+test(`optional second real COPC /core ${backend}: bounded read, encode, validate and render`, async ({ page }) => {
   const url = process.env.COPC_TILES_SECOND_COPC_URL;
   test.skip(!url, 'Set COPC_TILES_SECOND_COPC_URL to a public CORS-enabled COPC source for this opt-in test.');
   test.setTimeout(180_000);
@@ -22,15 +23,19 @@ test('optional second real COPC: bounded public Adapter read, encode, validate a
   });
   await page.goto('/test/browser/adapter.html');
   await resetServerStats(page);
-  const result = await page.evaluate(sourceUrl => window.startRealAdapterIntegration({
+  const result = await page.evaluate(({ sourceUrl, selectedBackend }) => window.startRealAdapterIntegration({
     url: sourceUrl,
+    backend: selectedBackend,
     sourceIdentity: `release-audit:${new URL(sourceUrl).origin}${new URL(sourceUrl).pathname}`,
     rangeValidation: 'head-fallback',
     maxHierarchyPages: 512,
     nodeCount: 3,
     distinctLevels: true,
-  }), url);
-  assert.equal(result.adapterVersion, '0.6.0');
+  }), { sourceUrl: url, selectedBackend: backend });
+  assert.equal(result.adapterBackend, backend);
+  assert.ok(Number.isSafeInteger(result.adapterSourceGeneration));
+  assert.ok(Number.isSafeInteger(result.adapterTransformGeneration));
+  assert.equal(result.decodedPointBoundsKind, 'decoded-point-content');
   assert.ok(result.nodePointCount > 0 && result.nodePointCount <= 8192);
   assert.equal(result.encodedPointCount, result.nodePointCount);
   assert.equal(result.multiNodeSummary.length, 3);
@@ -40,10 +45,13 @@ test('optional second real COPC: bounded public Adapter read, encode, validate a
   assert.ok(result.multiNodeSummary.some(parent => result.multiNodeSummary.some(child => (
     child.parentKey === parent.nodeKey && (parent.declaredChildren.length === 0 || parent.declaredChildren.includes(child.nodeKey))
   ))), 'the selected hierarchy contains at least one stable parent/child node-key pair');
+  assert.ok(result.multiNodeSummary.every(node => node.retainedPointBufferBytes > 0 && node.glbBytes > 0));
+  assert.equal(result.multiNodeRetainedPointBufferBytes, result.multiNodeSummary.reduce((total, node) => total + node.retainedPointBufferBytes, 0));
+  assert.equal(result.multiNodeEncodedGlbBytes, result.multiNodeSummary.reduce((total, node) => total + node.glbBytes, 0));
   assert.equal(result.pointsInsideBounds, true);
   assert.ok(result.maxAbsoluteErrorMeters <= 0.01);
   assert.ok(result.ecefFirstPoint.every(Number.isFinite));
-  assert.ok(['unknown', 'unverified'].includes(result.sourceCrsStatus));
+  assert.ok(['unknown', 'unverified', 'identified'].includes(result.sourceCrsStatus));
   assert.equal(result.verticalDatumStatus, 'unknown');
   for (const [field, value] of Object.entries({
     intensity: result.availableSamples.intensity,
@@ -133,7 +141,8 @@ test('optional second real COPC: bounded public Adapter read, encode, validate a
     source: 'configured second COPC', nodeKey: result.nodeKey, points: result.nodePointCount, fields: result.availableFields,
     hierarchyPages: result.hierarchyPagesRead, hierarchyNodesSeen: result.hierarchyNodeCount,
     childPageRefsSeen: result.hierarchyChildPageRefs, hierarchyLevelCounts: result.hierarchyLevelCounts,
-    multiNodeSummary: result.multiNodeSummary, sourceRangeCount: ranges.length, sourceRangeBytesIncludingRepeatedReads: rangeBytes,
+    multiNodeSummary: result.multiNodeSummary, multiNodeRetainedPointBufferBytes: result.multiNodeRetainedPointBufferBytes,
+    multiNodeEncodedGlbBytes: result.multiNodeEncodedGlbBytes, sourceRangeCount: ranges.length, sourceRangeBytesIncludingRepeatedReads: rangeBytes,
     sourceObjectLengthBytes: Number(copcRequests.find(request => request.method === 'HEAD')?.contentLength),
     sourceRequests: result.sourceRequests, timingsMilliseconds: result.pipelineTimingsMilliseconds,
     glbBytes: glb.byteLength, glbSha256: expectedHash, maxPositionErrorMeters: result.maxAbsoluteErrorMeters,
@@ -143,3 +152,4 @@ test('optional second real COPC: bounded public Adapter read, encode, validate a
     cesiumGeographicPosition: { longitude: cesium.longitudeDegrees, latitude: cesium.latitudeDegrees },
   }));
 });
+}

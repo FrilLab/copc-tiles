@@ -20,17 +20,22 @@ bounds.
 
 The module rejects incomplete child discovery, disconnected or cyclic
 hierarchies, invalid octree coordinates, unsafe integers, non-finite or
-non-conservative bounds, and resource-limit violations. It does not infer
-bounds from the Adapter, transform source-CRS bounds, or claim that fixture
-bounds came from a COPC file. Adapter 0.6.0 does not expose the complete
-public per-node ECEF-bound/provenance contract required for that integration;
-the gap is tracked in Adapter [issue #383](https://github.com/mors119/copc-adapter/issues/383).
-Adapter [PR #391](https://github.com/mors119/copc-adapter/pull/391) is merged
-in upstream source but is not in the published 0.6.0 package. Its available
-source-cell bounds are expressed in COPC CRS, and bounds over decoded points do
-not establish a transformed conservative bound for an undecoded cell. Neither
-can stand in for a parent ECEF volume that must keep undiscovered descendants
-traversable without a reviewed transform-aware bound contract.
+non-conservative bounds, and resource-limit violations. The packed Adapter
+`/core` candidate supplies public node/page access, generations, transform
+provenance, and decoded-point ECEF bounds. Those point-content bounds do not
+establish a transformed conservative bound for an undecoded cell. The public
+`getNodeCellBounds()` returns source-CRS bounds; the public point transformer
+does not promise an interval bound when applied to cell corners. Tiles does
+not use either corners or decoded points as an ECEF cell bound.
+
+The primary Autzen source declares horizontal EPSG:2992 (NAD83 / Oregon GIC
+Lambert, international feet) and vertical EPSG:6360 (NAVD88, US survey feet).
+Its transform plan has no configured vertical grid and marks the vertical
+conversion as a compatibility pass-through. A safe multi-node tileset needs
+the bound to enclose the exact Adapter transform over every point in each
+source cell. The required public operation is proposed in
+[`adapter-383-bounds-followup.md`](./adapter-383-bounds-followup.md). Until
+that API exists, the real Autzen path stops before creating tileset bounds.
 
 Fixture verification:
 
@@ -38,9 +43,8 @@ Fixture verification:
   CesiumGS 3D Tiles Validator against a generated tileset and GLB content.
 - `npm run typecheck` checks the exported TypeScript implementation.
 
-The one-node Autzen browser wrapper uses the encoder origin and transform, its
-actual decoded point bounds, and a non-zero root geometric error equal to the
-measured bound half-diagonal. This allowed Cesium's normal screen-space
-selection to request the real GLB. It is only a placement/culling check for one
-decoded node; it does not validate conservative bounds for an undecoded COPC
-cell or the geometric-error progression of a real COPC hierarchy.
+The existing one-node Autzen wrapper uses the Adapter-returned decoded-point
+bounds only for its already-decoded single content node. It is a renderer
+placement check, not evidence for parent/child cell bounds or production LOD.
+The wrapper is not used as a fallback for the missing undecoded-cell bounds.
+See the [packed API compatibility matrix](./adapter-api-compatibility.md).

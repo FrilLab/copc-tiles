@@ -1,93 +1,107 @@
 # Using COPC Tiles
 
-COPC Tiles is a source-neutral 3D Tiles engine. Provide a `TileNodeSource`
-implementation to the bounded `TileNodeReader`, encode each returned
-`TilePointView`, build a tileset from conservative source-provided bounds, and
-serve resources with `TileResourceServer`.
+COPC Tiles is a source-neutral 3D Tiles engine. Its optional Adapter connector
+uses the renderer-neutral public `@frillab/copc-adapter/core` API. The adapter
+source still owns COPC ranges, hierarchy parsing, LAZ decode, and CRS/vertical
+preparation. Tiles provides bounded reads for explicitly requested node keys,
+encoding, tileset primitives, and resource serving; this review candidate does
+not yet connect live COPC hierarchy requests to production multi-node Tiles LOD.
 
 ```ts
+import { createCopcCoreNodeSource } from '@frillab/copc-tiles/adapter/copc-core';
 import {
   TileNodeReader,
   encodePointCloudGlb,
-  createTileResourceServer,
-  type TileNodeSource,
-  type TileResourceProvider,
 } from '@frillab/copc-tiles';
 
-export async function encodeRequestedNode(
-  source: TileNodeSource,
-  provider: TileResourceProvider,
-) {
+const source = await createCopcCoreNodeSource({
+  input: '/data/autzen.copc.laz',
+  backend: 'copc-js', // choose 'rust' explicitly to use Rust/WASM
+  sourceIdentity: 'catalog:autzen-2026-10', // opaque; do not use a signed URL
+  contextOptions: { heightOffsetMeters: 0 },
+});
+
+try {
   const reader = new TileNodeReader(source, {
     maxRequestedNodes: 8,
     maxPointsPerNode: 100_000,
   });
-  const views = await reader.readNodes(['root'], {
+  const views = await reader.readNodes(['4-11-2-0'], {
     attributes: { rgb: true, intensity: true },
   });
-  const view = views.get('root');
-  if (!view) throw new Error('The source did not return the requested root node.');
-  const rootGlb = encodePointCloudGlb(view);
-  if (!rootGlb) throw new Error('The selected node has no points.');
+  const view = views.get('4-11-2-0');
+  if (!view) throw new Error('The source did not return the requested node.');
 
-  const resources = createTileResourceServer(provider, {
-    maxCacheBytes: 64 * 1024 * 1024,
-  });
-  // Persist rootGlb.bytes at the URI returned by the tileset builder/provider.
-  // Adapt resources.handle(request) to the hosting framework's URL handler.
-  return { view, rootGlb, resources };
+  const content = encodePointCloudGlb(view);
+  if (!content) throw new Error('The selected node has no points.');
+  console.log(view.context.sourceGeneration, view.context.transformPlan?.identity.key);
+  console.log(view.context.availableFields, content.bytes);
+} finally {
+  source.close();
 }
 ```
 
-The external source must report accurate node identity, point counts, selected
-attributes, ECEF Float64 coordinates, coordinate provenance, and conservative
-ECEF bounds. Missing data is an error; the engine does not synthesize
-attributes, vertical corrections, or bounds. Keep the same source generation
-for the lifetime of its reader and resource provider. `TileNodeReader` has no
-close method: close the resource server, then close the connector or destroy
-the source if your application owns it. Resource providers remain caller-owned
-unless `closeProviderOnShutdown: true` is set on the resource server.
+The connector preserves the Adapter source and transform generations, its
+immutable transform plan, actual field availability, and zero-copy ECEF
+Float64 buffers. Missing standard fields and Extra Dimensions are omitted and
+reported in the node context; Tiles does not create zero-filled attributes.
+Named Extra Bytes must be configured at source open and requested by exact
+case-sensitive name. Adapter's `copc-js` supports exact values where the LAS
+descriptor allows them; Rust/WASM explicitly rejects Extra Bytes requests.
 
-The optional `@frillab/copc-tiles/adapter/copc-js` integration entrypoint
-supports the verified `@frillab/copc-adapter@0.6.0` public API for bounded
-node reads and A-shaped point preparation. It dynamically loads the Adapter
-`/cesium` entrypoint only when fallback preparation is needed. Version 0.6.0
-does not provide conservative ECEF bounds for undecoded node cells or a
-transform generation contract, so this connector cannot build a complete
-real COPC hierarchy. Adapter
-[PR #391](https://github.com/mors119/copc-adapter/pull/391) is merged at
-`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`; it adds a public renderer-neutral
-`/core` API to upstream package source. That API is not in the published
-0.6.0 tarball, so this package does not import or claim compatibility with it.
-Its decoded-point bounds still do not bound undecoded cells in ECEF. See the
-[versioned API compatibility matrix](./adapter-api-compatibility.md) and
-[Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383).
+`view.context.decodedPointEcefBounds` is the bound for that decoded node's
+transformed point content and is labeled
+`decodedPointEcefBoundsKind: 'decoded-point-content'`. It can bound the loaded
+content. It is not a conservative bound for an undecoded hierarchy cell or
+undiscovered descendants. Adapter source-cell bounds remain in COPC source
+coordinates. Tiles does not transform cell corners and claim they bound an
+arbitrary nonlinear CRS or vertical-grid operation.
 
-The Autzen browser check pre-encodes one bounded COPC node before the renderer
-starts, then serves its tileset and GLB by URL. The opt-in SoFi check reads
-three real node keys at levels 2–4, checks them against Adapter hierarchy
-point counts, encodes their point views, then serves one primary node through
-the same URL to Cesium and Three. These checks prove real Adapter-prepared
-content can be consumed by both renderers; they are not an on-demand
-COPC-to-resource provider or a multi-node Tiles LOD hierarchy. The
-source-neutral `TileResourceServer` supports lazy resource providers, but
-connecting it to a complete Adapter hierarchy remains blocked by the missing
-public conservative cell bounds and transform-generation contract.
+The missing public conservative source-cell-to-ECEF bounds contract blocks
+production on-demand tileset generation for Autzen. The one-node examples and
+render checks below are bounded content checks; they do not implement live
+multi-node request scheduling or camera-driven COPC refinement. See the
+[proposed Adapter #383 follow-up](./adapter-383-bounds-followup.md).
 
-The SoFi object is served with HTTP Range, but the browser cannot read its
-`Content-Range` response header. The optional test therefore selects the
-Adapter's existing `head-fallback` policy and observes a HEAD request; strict
-Range validation is not demonstrated for that browser origin. The real test
-command is:
+`TileNodeReader` resolves only requested node keys and has bounded hierarchy
+pages, ranges, decoded points, concurrency, and cancellation. It does not
+materialize the full octree or run Adapter's Direct `NodeSelector`. A complete
+production LOD tileset still needs a conservative policy for cells whose
+points have not yet been decoded.
+
+## Adapter compatibility
+
+Adapter PR #391 is merged at
+`c5b563b3d0c5743b8030a79eca8c820421c9d4a7`. Tiles built and installed a packed
+candidate from that source commit and tested its `/core` ESM and declarations.
+The candidate's package metadata still says `0.6.0`; the published npm
+`0.6.0` tarball predates `/core`. Tiles therefore declares the optional peer
+range `>=0.6.1 <1.0.0`; no npm release in that range has been verified yet.
+See the [versioned API matrix](./adapter-api-compatibility.md) for its tarball
+hash, declaration-resolution limitation, backend results, and
+[Adapter issue #383](https://github.com/mors119/copc-adapter/issues/383)
+follow-up.
+
+## Real-source browser checks
+
+The Autzen and SoFi Chromium tests run with both `copc-js` and Rust/WASM and
+use bounded HTTP Range requests. They encode real nodes, run Khronos and
+CesiumGS validators, and render the same primary GLB bytes in Cesium and Three.
+SoFi reads and encodes three real hierarchy nodes across levels 2–4, but renders
+only the primary node. Both backends use Adapter's `head-fallback` Range
+validation because the browser origin does not expose `Content-Range`.
 
 ```sh
+COPC_TILES_AUTZEN=/path/to/autzen-classified.copc.laz \
+  npm run validate:adapter-integration
+
 COPC_TILES_SECOND_COPC_URL=https://hobu-lidar.s3.amazonaws.com/sofi.copc.laz \
   npx playwright test --config test/browser/playwright.config.mjs \
   test/browser/second-source.real.spec.mjs
 ```
 
-The real source tests use public Adapter 0.6.0 only. No Rust, E cache,
-File/Blob, named Extra Bytes, independent vertical correction, full source
-coverage, or Direct-versus-Tiles comparison is claimed. See the
-[release acceptance audit](./release-audit-2026-10-29.md) and
-[performance report](./benchmark-report-2026-10-29.md).
+These checks do not prove full-cloud coverage, multi-node conservative ECEF
+bounds, production LOD, or vertical-datum correctness. File/Blob input, real
+named Extra Bytes, and full source switching under camera
+churn remain unverified. See the [implementation status](./implementation-status.md)
+and [benchmark report](./benchmark-report-2026-10-29.md).

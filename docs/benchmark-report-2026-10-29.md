@@ -63,6 +63,33 @@ The preliminary point-view sample and subsequent Tiles read overlap in source
 data and create repeated requests; the stage table describes test work rather
 than an optimized application schedule.
 
+## 2026-10-30 browser revalidation sample
+
+The packed-candidate real-source browser gates were rerun in Chromium on the
+same development machine. These are individual observations, not new medians
+or a production multi-node Tiles benchmark. The driver also sums the backing
+buffers retained by the selected `TilePointView` objects and counts the GLB
+bytes generated for the selected nodes. It does not include Adapter cache
+retention, browser/GPU allocations, or peak temporary memory.
+
+| Source / backend | Hierarchy pages and decoded nodes | Node preparation | GLB encode time | Retained point-view buffers | Generated GLB bytes | Browser `totalThroughBase64` | Renderer load/render |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Autzen / `copc-js` | 1 page, 1 node, 5,122 points | 16.9 ms | 3.1 ms | 169,026 B | 119,292 B | 85.9 ms | Cesium 1,405.0 ms; Three 232.4 ms |
+| Autzen / Rust/WASM | 1 page, 1 node, 5,122 points | 16.4 ms | 3.4 ms | 169,026 B | 119,292 B | 90.7 ms | Cesium 1,343.4 ms; Three 202.9 ms |
+| SoFi / `copc-js` | 1 page, 3 nodes at levels 2–4, 15,796 points | 845.7 ms | 4.6 ms for primary GLB; two additional GLBs were generated outside this timer | 426,492 B across all three views | 240,816 B across all three generated GLBs | 3,182.8 ms | Cesium 1,096.7 ms; Three 152.7 ms for the primary node only |
+| SoFi / Rust/WASM | 1 page, 3 nodes at levels 2–4, 15,796 points | 983.9 ms | 4.2 ms for primary GLB; two additional GLBs were generated outside this timer | 426,492 B across all three views | 240,816 B across all three generated GLBs | 3,281.8 ms | Cesium 1,071.6 ms; Three 148.3 ms for the primary node only |
+
+The Autzen buffer total is the retained ECEF Float64 plus requested RGB,
+intensity, and classification backing buffers for its single view. The SoFi
+total covers the three simultaneously held ECEF, intensity, and classification
+views. It excludes decoded LAZ intermediates and any Adapter-internal caches.
+SoFi's 240,816-byte content total is generated output volume; only the
+18,256-byte primary GLB is passed to the renderer in this wrapper. The
+renderer figures include browser startup and local serving, not camera-driven
+COPC refinement. No peak temporary memory or total retained browser memory was
+measured, so these figures do not satisfy a full multi-node memory/performance
+benchmark.
+
 ## A versus experimental E
 
 Command: `npm run bench:engine` (synthetic ECEF node, 100,000 points, Node

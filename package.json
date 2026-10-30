@@ -29,9 +29,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./adapter/copc-js": {
-      "types": "./dist/adapter/copcJsAdapter.d.ts",
-      "import": "./dist/adapter/copcJsAdapter.js"
+    "./adapter/copc-core": {
+      "types": "./dist/adapter/copcCoreAdapter.d.ts",
+      "import": "./dist/adapter/copcCoreAdapter.js"
     },
     "./resources": {
       "types": "./dist/resources/tileResourceServer.d.ts",
@@ -50,6 +50,7 @@
   "scripts": {
     "test": "node --import tsx --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
+    "typecheck:adapter-core": "tsc --noEmit -p tsconfig.adapter-core.json",
     "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.build.json",
     "prepack": "npm run build",
     "validate:gltf": "node --import tsx --test test/pointCloudGlb.test.mjs",
@@ -61,7 +62,7 @@
     "bench:engine": "node --expose-gc --import tsx bench/engine.mjs"
   },
   "peerDependencies": {
-    "@frillab/copc-adapter": "0.6.0"
+    "@frillab/copc-adapter": ">=0.6.1 <1.0.0"
   },
   "peerDependenciesMeta": {
     "@frillab/copc-adapter": {
@@ -69,7 +70,6 @@
     }
   },
   "devDependencies": {
-    "@frillab/copc-adapter": "0.6.0",
     "@playwright/test": "1.64.1",
     "3d-tiles-renderer": "0.5.3",
     "3d-tiles-validator": "0.6.1",

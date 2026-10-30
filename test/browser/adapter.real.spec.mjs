@@ -7,17 +7,22 @@ import validator from 'gltf-validator';
 import tilesValidator from '3d-tiles-validator';
 import { resetServerStats } from './browser-utils.mjs';
 
-test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Cesium and Three.js', async ({ page }) => {
-  test.skip(!process.env.COPC_TILES_AUTZEN, 'Set COPC_TILES_AUTZEN to the verified Autzen COPC sample.');
-  test.setTimeout(120_000);
-  const pageErrors = [];
-  page.on('pageerror', (error) => pageErrors.push(error.message));
-  await page.goto('/test/browser/adapter.html');
-  await resetServerStats(page);
-  const result = await page.evaluate(() => window.startRealAdapterIntegration());
-  const stats = await page.evaluate(async () => (await fetch('/__stats')).json());
+for (const backend of ['copc-js', 'rust']) {
+  test(`packed Adapter /core ${backend} source feeds real Autzen content to Cesium and Three.js`, async ({ page }) => {
+    test.skip(!process.env.COPC_TILES_AUTZEN, 'Set COPC_TILES_AUTZEN to the verified Autzen COPC sample.');
+    test.setTimeout(120_000);
+    const pageErrors = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.goto('/test/browser/adapter.html');
+    await resetServerStats(page);
+    const result = await page.evaluate((selectedBackend) => window.startRealAdapterIntegration({ backend: selectedBackend }), backend);
+    const stats = await page.evaluate(async () => (await fetch('/__stats')).json());
 
-  assert.equal(result.adapterVersion, '0.6.0');
+  assert.equal(result.adapterBackend, backend);
+  assert.ok(Number.isSafeInteger(result.adapterSourceGeneration) && result.adapterSourceGeneration >= 0);
+  assert.ok(Number.isSafeInteger(result.adapterTransformGeneration) && result.adapterTransformGeneration >= 0);
+  assert.ok(result.transformPlanIdentity.length > 0);
+  assert.equal(result.decodedPointBoundsKind, 'decoded-point-content');
   assert.ok(Number.isSafeInteger(result.metadataPointCount) && result.metadataPointCount > 0);
   assert.equal(result.loadedPointCount, result.nodePointCount);
   assert.equal(result.encodedPointCount, result.nodePointCount);
@@ -25,9 +30,11 @@ test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Ce
   assert.ok(result.hierarchyPagesRead <= 64);
   assert.ok(result.ecefFirstPoint.every(Number.isFinite));
   assert.ok(result.maxAbsoluteErrorMeters <= 0.01);
+  assert.ok(result.multiNodeRetainedPointBufferBytes >= result.loadedPointCount * 3 * Float64Array.BYTES_PER_ELEMENT);
+  assert.ok(result.multiNodeEncodedGlbBytes >= Math.floor(result.glbBase64.length * 3 / 4));
   assert.ok(result.tileset.root.geometricError > 0);
   assert.equal(result.pointsInsideBounds, true);
-  assert.equal(result.sourceCrsStatus, 'unverified');
+  assert.ok(['identified', 'unverified', 'unknown'].includes(result.sourceCrsStatus));
   assert.equal(result.verticalDatumStatus, 'unknown');
   assert.ok(result.availableFields.includes('position'));
   assert.equal(result.actualAttributes.red !== null, result.availableFields.includes('rgb'));
@@ -47,7 +54,7 @@ test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Ce
   assert.equal(gltfReport.issues.numErrors, 0, JSON.stringify(gltfReport.issues.messages));
   assert.equal(gltfReport.issues.numWarnings, 0, JSON.stringify(gltfReport.issues.messages));
   assert.deepEqual(pageErrors, []);
-  console.log(`Autzen Adapter 0.6.0: ${result.nodeKey}, ${result.nodePointCount} points, fields=${result.availableFields.join(',')}, ranges=${stats.copcRangeCount}, rangeBytes=${stats.copcRangeBytes}, GLB=${Math.floor(result.glbBase64.length * 3 / 4)} bytes, Khronos errors/warnings=${gltfReport.issues.numErrors}/${gltfReport.issues.numWarnings}, pipelineMs=${JSON.stringify(result.pipelineTimingsMilliseconds)}`);
+  console.log(`Autzen Adapter /core ${backend}: ${result.nodeKey}, ${result.nodePointCount} points, fields=${result.availableFields.join(',')}, ranges=${stats.copcRangeCount}, rangeBytes=${stats.copcRangeBytes}, GLB=${Math.floor(result.glbBase64.length * 3 / 4)} bytes, retained point buffers=${result.multiNodeRetainedPointBufferBytes} bytes, encoded node GLBs=${result.multiNodeEncodedGlbBytes} bytes, Khronos errors/warnings=${gltfReport.issues.numErrors}/${gltfReport.issues.numWarnings}, pipelineMs=${JSON.stringify(result.pipelineTimingsMilliseconds)}`);
 
   const directory = await mkdtemp(join(tmpdir(), 'copc-tiles-autzen-one-tile-'));
   try {
@@ -134,7 +141,7 @@ test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Ce
   assert.equal(threeDispose.activeTilesAfterDispose, 0);
   assert.equal(threeDispose.groupDetached, true);
 
-  console.log(`Real one-node Autzen rendering: Cesium ${cesium.visiblePoints} visible points, ${cesium.pixels.nonBlackPixels}/${cesium.movedPixels.nonBlackPixels} initial/moved rendered pixels at ${cesium.longitudeDegrees.toFixed(6)},${cesium.latitudeDegrees.toFixed(6)}, browser load/render=${cesium.renderMilliseconds.toFixed(1)} ms; Three ${three.pointCount} points, ${three.initialPixels.nonBlackPixels}/${three.movedPixels.nonBlackPixels} initial/moved rendered pixels, browser load/render=${three.renderMilliseconds.toFixed(1)} ms; bounds-center/first-point world error=${maxBoundsCenterErrorMeters.toFixed(4)}/${positionErrorMeters.toFixed(4)} m; encoder error=${result.maxAbsoluteErrorMeters.toFixed(4)} m; cached resources=${cesium.resources.cache.cacheBytes} bytes.`);
+  console.log(`Real one-node Autzen rendering (${backend}): Cesium ${cesium.visiblePoints} visible points, ${cesium.pixels.nonBlackPixels}/${cesium.movedPixels.nonBlackPixels} initial/moved rendered pixels at ${cesium.longitudeDegrees.toFixed(6)},${cesium.latitudeDegrees.toFixed(6)}, browser load/render=${cesium.renderMilliseconds.toFixed(1)} ms; Three ${three.pointCount} points, ${three.initialPixels.nonBlackPixels}/${three.movedPixels.nonBlackPixels} initial/moved rendered pixels, browser load/render=${three.renderMilliseconds.toFixed(1)} ms; bounds-center/first-point world error=${maxBoundsCenterErrorMeters.toFixed(4)}/${positionErrorMeters.toFixed(4)} m; encoder error=${result.maxAbsoluteErrorMeters.toFixed(4)} m; cached resources=${cesium.resources.cache.cacheBytes} bytes.`);
   console.log(JSON.stringify({
     autzenPrecisionMeters: {
       maxBoundsCenterError: maxBoundsCenterErrorMeters,
@@ -142,4 +149,5 @@ test('public Adapter 0.6.0 feeds real Autzen content through URL resources to Ce
       encoderMaxAbsoluteError: result.maxAbsoluteErrorMeters,
     },
   }));
-});
+  });
+}
