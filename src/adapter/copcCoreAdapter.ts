@@ -1,5 +1,16 @@
-// @ts-ignore -- published Adapter 0.6.0 predates /core; the packed candidate is checked separately.
-import type { CopcBackendName, CopcContextOptions, CopcHierarchyNode, CopcHierarchyPage, CopcInputSource, CopcNodeSource, CopcPointField, CopcPreparedNodeData } from '@frillab/copc-adapter/core';
+import type {
+  CopcBackendName,
+  CopcContextOptions,
+  CopcHierarchyBounds,
+  CopcHierarchyNode,
+  CopcHierarchyPage,
+  CopcInputSource,
+  CopcMetadata,
+  CopcNodeSource,
+  CopcPointField,
+  CopcPreparedNodeData,
+  CoordinateTransformPlan,
+} from '@frillab/copc-adapter/core';
 import {
   createTilePointViewFromA,
   snapshotTilePointFieldSelection,
@@ -64,6 +75,7 @@ export class CopcCoreNodeSource implements TileNodeSource {
   readonly sourceIdentity: string;
   readonly sourceGeneration: number;
   readonly transformGeneration: number;
+  readonly transformPlan: CoordinateTransformPlan;
   readonly #source: CopcNodeSource;
   readonly #ownsSource: boolean;
   readonly #isCurrentOverride: (() => boolean) | undefined;
@@ -89,12 +101,33 @@ export class CopcCoreNodeSource implements TileNodeSource {
     this.sourceIdentity = options.sourceIdentity;
     this.sourceGeneration = options.source.sourceGeneration;
     this.transformGeneration = options.source.transformGeneration;
+    this.transformPlan = options.source.transformPlan;
   }
 
   isCurrent(): boolean {
     return !this.#closed &&
       this.#source.isCurrent(this.sourceGeneration) &&
       (this.#isCurrentOverride?.() ?? true);
+  }
+
+  /** Return source metadata without relabeling source-space bounds as ECEF. */
+  getMetadata(): CopcMetadata {
+    this.#assertCurrent();
+    return freezeMetadataCopy(this.#source.getMetadata());
+  }
+
+  /** Return one COPC cell in its original source CRS and units. */
+  getNodeCellBounds(nodeKey: string): CopcHierarchyBounds {
+    this.#assertCurrent();
+    const bounds = this.#source.getNodeCellBounds(nodeKey);
+    return Object.freeze({
+      minX: bounds.minX,
+      minY: bounds.minY,
+      minZ: bounds.minZ,
+      maxX: bounds.maxX,
+      maxY: bounds.maxY,
+      maxZ: bounds.maxZ,
+    });
   }
 
   getRootHierarchyPage(): TileHierarchyPage {
@@ -215,11 +248,9 @@ export function wrapCopcCoreNodeSource(options: CopcCoreNodeSourceOptions): Copc
   return new CopcCoreNodeSource(options);
 }
 
-// @ts-ignore -- published Adapter 0.6.0 predates /core; the packed candidate is checked separately.
 type CopcCoreRuntime = typeof import('@frillab/copc-adapter/core');
 
 async function importCoreApi(): Promise<CopcCoreRuntime> {
-  // @ts-ignore -- published Adapter 0.6.0 predates /core; the packed candidate is checked separately.
   return import('@frillab/copc-adapter/core');
 }
 
@@ -369,6 +400,17 @@ function validateDecodedPointBounds(prepared: CopcPreparedNodeData, nodeKey: str
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function freezeMetadataCopy<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => freezeMetadataCopy(entry))) as T;
+  }
+  if (!value || typeof value !== 'object') return value;
+  const copy = Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, freezeMetadataCopy(entry)]),
+  );
+  return Object.freeze(copy) as T;
 }
 
 function combineSignals(

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as adapterCore from '@frillab/copc-adapter/core';
 import { CopcCoreAdapterError, CopcCoreNodeSource, wrapCopcCoreNodeSource } from '../src/adapter/copcCoreAdapter.ts';
 import { TileNodeReader } from '../src/source/tileNodeReader.ts';
 
@@ -90,6 +91,33 @@ function wrap(source, overrides = {}) {
     ...overrides,
   });
 }
+
+test('the installed Adapter 0.7.0 package publishes the renderer-neutral Core exports', () => {
+  assert.equal(typeof adapterCore.createCopcContext, 'function');
+  assert.equal(typeof adapterCore.CopcContext, 'function');
+  assert.equal(typeof adapterCore.getCopcHierarchyCellBounds, 'function');
+  assert.equal(typeof adapterCore.createCoordinateTransformPlan, 'function');
+});
+
+test('exposes immutable source metadata, source-space cell bounds, and the Adapter transform plan', () => {
+  const metadata = {
+    pointCount: 2,
+    bounds: { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 },
+    extraDimensions: [{ name: 'track_id', type: 'unsigned', length: 8 }],
+  };
+  const cellBounds = { minX: 0, minY: 0, minZ: 0, maxX: 1, maxY: 1, maxZ: 1 };
+  const source = makeSource({ getMetadata: () => metadata, getNodeCellBounds: () => cellBounds });
+  const bridge = wrap(source);
+
+  const exposedMetadata = bridge.getMetadata();
+  assert.notEqual(exposedMetadata, metadata);
+  assert.notEqual(exposedMetadata.extraDimensions, metadata.extraDimensions);
+  assert.equal(Object.isFrozen(exposedMetadata.extraDimensions[0]), true);
+  assert.equal(bridge.transformPlan, source.transformPlan);
+  assert.deepEqual(bridge.getNodeCellBounds(node.key), cellBounds);
+  assert.notEqual(bridge.getNodeCellBounds(node.key), cellBounds);
+  bridge.close();
+});
 
 test('loads A-shaped prepared point data through public Core methods without copying ECEF or attributes', async () => {
   let receivedFields;
