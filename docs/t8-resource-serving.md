@@ -42,11 +42,12 @@ shutdown or replacement.
 The live provider accepts only supported Adapter conservative ECEF bounds. It
 preserves unsupported results and reasons, including projected CRS rejections,
 and never substitutes decoded-point bounds. Before content reads it derives a
-conservative Float32 reconstruction envelope from each returned cell bound
-and expands the tile volume. It checks decoded points against Adapter's bound
-and actual GLB error against the envelope. Maximum accepted padding defaults
-to 1 cm. `ownsSource: true` transfers source closure to the provider;
-otherwise the caller retains ownership. Closing the provider aborts active
+Float32 reconstruction envelope for each content-bearing cell and propagates
+the largest descendant padding to ancestor volumes, including empty nodes. It
+checks decoded points against Adapter's bound and actual GLB error against the
+envelope. Maximum accepted padding defaults to 1 cm. `ownsSource: true`
+transfers source closure to the provider; otherwise the caller retains
+ownership. Closing the provider aborts active
 content reads.
 
 `npm run validate:resources` covers MIME types, URL addressing, HEAD/404/405,

@@ -53,12 +53,12 @@ Conservative bounds report `coverage: 'full-source-cell-and-descendant-cells'`,
 `verification: 'analytic-interval'`, and WGS84 ECEF metres for supported
 results. Source-cell bounds remain in the source CRS; decoded-point bounds
 remain point-content bounds. The result does not certify GLB Float32
-reconstruction error. The live provider computes a conservative per-axis
-Float32 envelope from each returned ECEF cell extent before point reads, pads
-the tile volume, then checks decoded points and actual GLB reconstruction
-error. Default maximum accepted padding is 1 cm and can be tightened. Unit
-fixtures validate the generated GLB and Tileset with Khronos and CesiumGS
-validators.
+reconstruction error. The live provider computes a conservative Float32
+envelope only for content-bearing cells before point reads, propagates the
+largest descendant padding to ancestor volumes (including empty nodes), then
+checks decoded points and actual GLB reconstruction error. Default maximum
+accepted padding is 1 cm and can be tightened. Unit fixtures validate the
+generated GLB and Tileset with Khronos and CesiumGS validators.
 
 ## Connector behavior
 

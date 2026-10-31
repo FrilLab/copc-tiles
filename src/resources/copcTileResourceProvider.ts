@@ -84,6 +84,12 @@ type PreparedTileNode = Readonly<{
   encoderPaddingMeters: number;
 }>;
 
+type PendingTileNode = Readonly<{
+  node: TileHierarchyNode;
+  conservativeBounds: Extract<TileConservativeBoundsResult, { status: 'supported' }>;
+  ownEncoderPaddingMeters: number;
+}>;
+
 const DEFAULT_MAX_ENCODER_PADDING_METERS = 0.01;
 const DEFAULT_MAX_GLB_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_TILESET_BYTES = 16 * 1024 * 1024;
@@ -107,6 +113,7 @@ export async function createCopcTileResourceProvider(
   const sourceTransformGeneration = source.transformGeneration;
   const reader = new TileNodeReader(source, options.readerLimits);
   const maxEncoderPaddingMeters = options.maxEncoderPaddingMeters ?? DEFAULT_MAX_ENCODER_PADDING_METERS;
+  const pendingNodes = new Map<string, PendingTileNode>();
   const preparedNodes = new Map<string, PreparedTileNode>();
   const tilesetInputs: TilesetNodeInput[] = [];
   let expectedSourceGeneration = source.sourceGeneration;
@@ -126,19 +133,17 @@ export async function createCopcTileResourceProvider(
       );
     }
     const rawBounds = resultBounds(result);
-    const encoderPaddingMeters = getFloat32EcefReconstructionErrorBound(rawBounds);
-    if (encoderPaddingMeters > maxEncoderPaddingMeters) {
+    const ownEncoderPaddingMeters = node.pointCount > 0
+      ? getFloat32EcefReconstructionErrorBound(rawBounds)
+      : 0;
+    if (node.pointCount > 0 && ownEncoderPaddingMeters > maxEncoderPaddingMeters) {
       throw new CopcTileResourceProviderError(
         'ENCODER_PADDING_LIMIT',
-        `Node ${node.key} needs ${encoderPaddingMeters} m of Float32 reconstruction padding; configured limit is ${maxEncoderPaddingMeters} m.`,
+        `Node ${node.key} needs ${ownEncoderPaddingMeters} m of Float32 reconstruction padding; configured limit is ${maxEncoderPaddingMeters} m.`,
         { nodeKey: node.key, conservativeBoundsResult: result },
       );
     }
-    const bounds = createPaddedEcefBoundsFromConservativeResult(result, encoderPaddingMeters);
-    const originEcef = centerOf(bounds);
-    const prepared = Object.freeze({ node, conservativeBounds: result, bounds, originEcef, encoderPaddingMeters });
-    preparedNodes.set(node.key, prepared);
-    tilesetInputs.push({ node, bounds });
+    pendingNodes.set(node.key, Object.freeze({ node, conservativeBounds: result, ownEncoderPaddingMeters }));
   };
   const hierarchy = await reader.readHierarchy({
     ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -146,6 +151,33 @@ export async function createCopcTileResourceProvider(
   });
 
   assertSourceCurrent(source, sourceIdentity, sourceGeneration, expectedSourceGeneration, sourceTransformGeneration);
+  const propagatedPadding = new Map<string, number>();
+  for (const node of [...hierarchy.nodes].sort((left, right) => right.level - left.level)) {
+    const pending = pendingNodes.get(node.key);
+    if (!pending) {
+      throw new CopcTileResourceProviderError('INVALID_CONSERVATIVE_BOUNDS', `Node ${node.key} has no validated conservative bounds.`, { nodeKey: node.key });
+    }
+    let padding = pending.ownEncoderPaddingMeters;
+    for (const childKey of node.children ?? []) {
+      padding = Math.max(padding, propagatedPadding.get(childKey) ?? 0);
+    }
+    propagatedPadding.set(node.key, padding);
+  }
+  for (const node of hierarchy.nodes) {
+    const pending = pendingNodes.get(node.key);
+    if (!pending) continue;
+    const encoderPaddingMeters = propagatedPadding.get(node.key) ?? pending.ownEncoderPaddingMeters;
+    const bounds = createPaddedEcefBoundsFromConservativeResult(pending.conservativeBounds, encoderPaddingMeters);
+    const prepared = Object.freeze({
+      node,
+      conservativeBounds: pending.conservativeBounds,
+      bounds,
+      originEcef: centerOf(bounds),
+      encoderPaddingMeters,
+    });
+    preparedNodes.set(node.key, prepared);
+    tilesetInputs.push({ node, bounds });
+  }
   const tileset = createExplicitTileset(tilesetInputs, options.tilesetOptions);
   const tilesetBytes = new TextEncoder().encode(JSON.stringify(tileset));
   if (tilesetBytes.byteLength > (options.maxTilesetBytes ?? DEFAULT_MAX_TILESET_BYTES)) {

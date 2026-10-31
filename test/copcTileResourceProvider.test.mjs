@@ -107,6 +107,72 @@ test('enforces an explicit Float32 bounds-padding budget and checks cancellation
   assert.equal(provider.isCurrent(), false);
 });
 
+test('applies encoder padding to content nodes and propagates it through oversized empty ancestors', async () => {
+  const base = createBrowserFixtureSource(10);
+  const rawContentBounds = base.getConservativeNodeEcefBounds('left').boundsEcef;
+  const contentPadding = getFloat32EcefReconstructionErrorBound({
+    minimum: [rawContentBounds.minX, rawContentBounds.minY, rawContentBounds.minZ],
+    maximum: [rawContentBounds.maxX, rawContentBounds.maxY, rawContentBounds.maxZ],
+  });
+  assert.ok(contentPadding > 0 && contentPadding <= 0.01);
+  const rootPage = { key: 'empty-root-page', pageOffset: 0, pageLength: 32 };
+  const childPage = { key: 'content-child-page', pageOffset: 32, pageLength: 32 };
+  const emptyRoot = {
+    key: 'root', level: 0, x: 0, y: 0, z: 0,
+    pointCount: 0, pointDataOffset: 0, pointDataLength: 0,
+    children: ['left'], childrenComplete: true,
+  };
+  const contentChild = {
+    key: 'left', level: 1, x: 0, y: 0, z: 0,
+    pointCount: 3, pointDataOffset: 100, pointDataLength: 72,
+    children: [], childrenComplete: true,
+  };
+  const source = {
+    ...base,
+    getRootHierarchyPage: () => rootPage,
+    loadHierarchyPage: async (page) => page.key === rootPage.key
+      ? { nodes: [emptyRoot], pages: [childPage] }
+      : { nodes: [contentChild], pages: [] },
+    getConservativeNodeEcefBounds: (nodeKey) => {
+      const result = base.getConservativeNodeEcefBounds(nodeKey);
+      if (nodeKey !== 'root') return result;
+      return {
+        ...result,
+        boundsEcef: {
+          ...result.boundsEcef,
+          minX: 6_000_000, maxX: 6_750_000,
+          minY: -375_000, maxY: 375_000,
+          minZ: -375_000, maxZ: 375_000,
+        },
+      };
+    },
+  };
+  const rawEmptyRootBounds = source.getConservativeNodeEcefBounds('root').boundsEcef;
+  const rootBoundsPadding = getFloat32EcefReconstructionErrorBound({
+    minimum: [rawEmptyRootBounds.minX, rawEmptyRootBounds.minY, rawEmptyRootBounds.minZ],
+    maximum: [rawEmptyRootBounds.maxX, rawEmptyRootBounds.maxY, rawEmptyRootBounds.maxZ],
+  });
+  assert.ok(rootBoundsPadding > 0.01, 'the empty root would exceed the default budget if encoded');
+  const provider = await createCopcTileResourceProvider(source, { scanCompleteHierarchy: true });
+  const tilesetBytes = await provider.getResource('tileset.json', new AbortController().signal);
+  assert.ok(tilesetBytes);
+  const tileset = JSON.parse(new TextDecoder().decode(tilesetBytes));
+  assert.equal(Object.hasOwn(tileset.root, 'content'), false);
+  assert.equal(tileset.root.children[0].content.uri, getExplicitTileContentUri('left'));
+  assert.ok(Math.abs(tileset.root.boundingVolume.box[3] - (375_000 + contentPadding)) < 1e-7);
+  assert.ok(Math.abs(
+    tileset.root.children[0].boundingVolume.box[3] - ((rawContentBounds.maxX - rawContentBounds.minX) / 2 + contentPadding),
+  ) < 1e-7);
+  assert.deepEqual(base.diagnostics.nodes, []);
+
+  const bytes = await provider.getResource(getExplicitTileContentUri('left'), new AbortController().signal);
+  assert.ok(bytes);
+  const gltfReport = await gltfValidator.validateBytes(bytes, { uri: 'left.glb' });
+  assert.equal(gltfReport.issues.numErrors, 0, JSON.stringify(gltfReport.issues.messages));
+  assert.deepEqual(base.diagnostics.nodes, ['left']);
+  await provider.close();
+});
+
 test('rejects resources after the Adapter source generation changes', async () => {
   const base = createBrowserFixtureSource(11);
   let generation = 11;

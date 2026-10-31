@@ -49,11 +49,12 @@ Fixture verification:
 - `npm run typecheck` checks the exported TypeScript implementation.
 
 For supported geographic fixtures, the Adapter bound does not include GLB
-Float32 reconstruction error. `createCopcTileResourceProvider` derives a
-conservative error envelope from each cell volume before reading points,
-applies it to the generated explicit Tileset volume, then verifies decoded
-point containment and actual GLB error. A two-node live source passes the
-Khronos and CesiumGS validators and renders in the Cesium/Three fixtures. Real
+Float32 reconstruction error. `createCopcTileResourceProvider` derives an
+error envelope for each content-bearing cell before point reads and propagates
+the largest descendant padding to ancestor volumes, including empty nodes. It
+then verifies decoded point containment and actual GLB error. A two-node live
+source passes the Khronos and CesiumGS validators and renders in the
+Cesium/Three fixtures. Real
 Autzen and SoFi are projected and remain unsupported; one-node renderer checks
 do not evidence projected parent/child cell bounds or real production LOD. No
 unsupported result falls back to decoded-point bounds.

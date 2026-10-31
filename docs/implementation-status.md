@@ -130,7 +130,7 @@ integration only, not a safe live multi-node Tileset demonstration.
 | `npm run typecheck` | Pass |
 | `npm run typecheck:adapter-core` | Pass |
 | `npm run build` | Pass |
-| `npm test` | 87 passed, 0 failed, 0 skipped on Node 18.20.8 and 22.14.0 after verified Sharp rebuild |
+| `npm test` | 88 passed, 0 failed, 0 skipped on Node 18.20.8 and 22.14.0 after verified Sharp rebuild |
 | `npm run validate:gltf` | 10 passed, including Khronos glTF validation |
 | `npm run validate:tileset` | 5 passed, including CesiumGS 3D Tiles validation |
 | `npm run validate:implicit` | 5 passed, including CesiumGS subtree validation |
@@ -152,12 +152,12 @@ construction was 0.011/0.005 ms; A/E prepare-and-encode was 20.594/19.937 ms.
 ## Package impact and release assessment
 
 The current Tiles `npm pack --dry-run` artifact contains the engine, connector
-and live provider only: 48 files, about 92.0 kB packed and 353,609 bytes
+and live provider only: 48 files, 92,202 bytes packed and 354,973 bytes
 unpacked. It
 contains no bundled dependencies. `@frillab/copc-adapter` is an optional peer
 and no renderer is a Tiles dependency. In clean packed consumers, installed
-file bytes measured 354,348 for Tiles alone, 5,594,405 for Adapter plus Tiles
-without renderers, and 194,220,210 for Adapter, Tiles, TypeScript, Cesium and
+file bytes measured 355,712 for Tiles alone, 5,595,769 for Adapter plus Tiles
+without renderers, and 194,221,574 for Adapter, Tiles, TypeScript, Cesium and
 Three. These are this machine's package file sizes, not filesystem block
 allocation.
 
@@ -189,7 +189,7 @@ issue is marked complete by the existence of Adapter 0.7.1's API.
 | [T2 #2](https://github.com/FrilLab/copc-tiles/issues/2) Node reads | Implemented, partially verified | Lazy requested reads on both backends; ordinary calls do not retain hierarchy metadata. The bounded live explicit provider retains records only after its explicit full-scan opt-in; it maps nodes to content URIs and reads requested points on demand. Fabricated node records are rejected before point reads. | Projected bounds prevent real-source live multi-node output; damaged real Range cases, camera cancellation/source switch and File/Blob matrix remain. |
 | [T3 #3](https://github.com/FrilLab/copc-tiles/issues/3) Precision | Implemented, partially verified | Float64 ECEF point prep; real Autzen reconstruction error about 1.96 µm; encoder padding checked against decoded Float32 GLB values. | Multi-node seams/coverage, more CRS/reference fixtures, and full error budget remain. |
 | [T4 #4](https://github.com/FrilLab/copc-tiles/issues/4) GLB | Implemented, partially verified | Khronos validation, deterministic POINTS/GLB, real Autzen content with zero validator errors/warnings. | Broader field representations, allocations and performance evidence remain. |
-| [T5 #5](https://github.com/FrilLab/copc-tiles/issues/5) Bounds / geometric error | Geographic live path implemented; projected bounds unsupported by Adapter 0.7.1; partial | Public provenance is validated; provider calculates Float32 padding before point reads, checks decoded containment and encoded error, and passes official GLB/Tileset validators on a two-node fixture. Autzen fails after one metadata page with zero point reads. | No projected CRS bound for Autzen/SoFi, real live geographic COPC evidence, validated-grid coverage/no-data/epoch evidence or geometric screen-error policy. |
+| [T5 #5](https://github.com/FrilLab/copc-tiles/issues/5) Bounds / geometric error | Geographic live path implemented; projected bounds unsupported by Adapter 0.7.1; partial | Public provenance is validated; provider applies Float32 padding to content nodes and propagates it to empty ancestors before point reads, then checks decoded containment and encoded error. Validators pass on a two-node fixture. Autzen fails after one metadata page with zero point reads. | No projected CRS bound for Autzen/SoFi, real live geographic COPC evidence, validated-grid coverage/no-data/epoch evidence or geometric screen-error policy. |
 | [T6 #6](https://github.com/FrilLab/copc-tiles/issues/6) Implicit tiling | Fixture engine implemented; real COPC integration not implemented | Sparse fixture subtree and official validator pass. | Live COPC hierarchy availability, real conservative bounds, and generated multi-node/subtree requests. The new explicit provider does not claim implicit availability. |
 | [T7 #7](https://github.com/FrilLab/copc-tiles/issues/7) Metadata | Implemented, partially verified | Real Autzen and SoFi standard attributes and GLB content verified; synthetic metadata validator cases. | Real Extra Bytes, GPS/return fields and cross-renderer 64-bit metadata remain. |
 | [T8 #8](https://github.com/FrilLab/copc-tiles/issues/8) Resource serving | Live provider implemented; partially verified | Explicit `scanCompleteHierarchy: true` opt-in gates bounded metadata-to-Tileset construction; content GLBs are on demand. Cancellation, generation, bounds fail-closed, caching and URL tests pass. Synthetic live provider is consumed through browser resource serving. | Real projected sources reject safely; camera cancellation/source replacement during real requests, implicit subtree resources and malformed real Range cases remain. |
