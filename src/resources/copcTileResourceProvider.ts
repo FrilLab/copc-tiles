@@ -22,7 +22,8 @@ import type {
 import type { TileResourceProvider } from './tileResourceServer.js';
 
 export type CopcTileResourceProviderOptions = Readonly<{
-  /** Explicitly opts into a bounded metadata-only scan of all hierarchy pages. */
+  /** Required explicit authorization to scan and materialize the complete hierarchy. */
+  scanCompleteHierarchy: true;
   readerLimits?: TileNodeReaderLimits;
   tilesetOptions?: ExplicitTilesetOptions;
   /** Point fields requested only when a content URI is fetched. */
@@ -46,6 +47,7 @@ export type CopcTileResourceProvider = TileResourceProvider & Readonly<{
 
 export type CopcTileResourceProviderErrorCode =
   | 'INVALID_SOURCE'
+  | 'FULL_HIERARCHY_SCAN_NOT_ENABLED'
   | 'STALE_SOURCE'
   | 'ABORTED'
   | 'UNSUPPORTED_BOUNDS'
@@ -88,13 +90,13 @@ const DEFAULT_MAX_TILESET_BYTES = 16 * 1024 * 1024;
 
 /**
  * Build an on-demand explicit Tiles provider over the public, renderer-neutral
- * COPC node-source contract. Creation reads bounded hierarchy metadata and
- * conservative bounds only; point payloads are fetched after a content URI is
- * requested by the consuming 3D Tiles renderer.
+ * COPC node-source contract. Creation requires explicit authorization via
+ * scanCompleteHierarchy and reads bounded hierarchy metadata and conservative
+ * bounds only; point payloads are fetched after a content URI is requested.
  */
 export async function createCopcTileResourceProvider(
   source: TileConservativeNodeSource,
-  options: CopcTileResourceProviderOptions = {},
+  options: CopcTileResourceProviderOptions,
 ): Promise<CopcTileResourceProvider> {
   validateOptions(options);
   validateSource(source);
@@ -235,6 +237,12 @@ function validateSource(source: TileConservativeNodeSource): void {
 function validateOptions(options: CopcTileResourceProviderOptions): void {
   if (!options || typeof options !== 'object') {
     throw new CopcTileResourceProviderError('INVALID_SOURCE', 'Provider options must be an object.');
+  }
+  if (options.scanCompleteHierarchy !== true) {
+    throw new CopcTileResourceProviderError(
+      'FULL_HIERARCHY_SCAN_NOT_ENABLED',
+      'Set scanCompleteHierarchy: true to authorize the bounded full metadata scan required by an explicit Tileset.',
+    );
   }
   const maxPadding = options.maxEncoderPaddingMeters ?? DEFAULT_MAX_ENCODER_PADDING_METERS;
   const maxGlbBytes = options.maxGlbBytes ?? DEFAULT_MAX_GLB_BYTES;

@@ -40,6 +40,7 @@ const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
 
 const createFixtureProvider = async (generation: number): Promise<TileResourceProvider> => {
   const liveProvider = await createCopcTileResourceProvider(createBrowserFixtureSource(generation), {
+    scanCompleteHierarchy: true,
     selection: { attributes: { rgb: true, intensity: true, classification: true } },
     maxEncoderPaddingMeters: 0.01,
   });

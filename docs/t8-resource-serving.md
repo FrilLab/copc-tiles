@@ -29,12 +29,13 @@ the generation-keyed server cache.
 `createStaticTileResourceProvider` is intended for deterministic fixtures or
 small prebuilt datasets. It snapshots at most 512 resources and 64 MiB by
 default. `createCopcTileResourceProvider` is the live Adapter-backed explicit
-Tileset provider. Creation performs a bounded metadata-only hierarchy scan and
-obtains conservative bounds for discovered cells; it does not read point data
-until a non-empty content URI is requested. This scan is explicit because an
-explicit hierarchy must prove direct-child completeness. It is bounded by
-`TileNodeReaderLimits`, which default to at most 512 hierarchy pages and 64
-MiB of hierarchy page bytes. Providers are caller-owned by default; set
+Tileset provider. It requires `scanCompleteHierarchy: true` to authorize the
+bounded metadata-only scan needed to prove direct-child completeness. Without
+that opt-in it rejects before reading hierarchy pages or point data. The scan
+obtains conservative bounds for discovered cells; point data is read only when
+a non-empty content URI is requested. It is bounded by `TileNodeReaderLimits`,
+which default to at most 512 hierarchy pages and 64 MiB of hierarchy page
+bytes. Providers are caller-owned by default; set
 `closeProviderOnShutdown: true` for the server to close its provider once on
 shutdown or replacement.
 

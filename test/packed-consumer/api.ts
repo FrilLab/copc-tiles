@@ -19,9 +19,10 @@ type RootTypesAreResolved = Assert<keyof typeof AdapterRootTypes extends string 
 
 declare const source: CopcConservativeNodeSource;
 declare const providerOptions: CopcTileResourceProviderOptions;
+const fullScanAuthorization: CopcTileResourceProviderOptions = { scanCompleteHierarchy: true };
 const metadata: CopcMetadata = source.getMetadata();
 const conservative: TileConservativeBoundsResult = source.getConservativeNodeEcefBounds('0-0-0-0');
-void [metadata, conservative, providerOptions];
+void [metadata, conservative, providerOptions, fullScanAuthorization];
 
 export type PackedConsumerCompatibility =
   | PublicBoundsArePreserved

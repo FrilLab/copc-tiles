@@ -13,6 +13,7 @@ import { createBrowserFixtureSource } from './browser/fixture.ts';
 test('builds the complete explicit hierarchy from metadata and reads points only for requested content', async () => {
   const source = createBrowserFixtureSource(7);
   const provider = await createCopcTileResourceProvider(source, {
+    scanCompleteHierarchy: true,
     selection: { attributes: { rgb: true, intensity: true, classification: true } },
   });
 
@@ -75,7 +76,7 @@ test('preserves unsupported conservative-bounds results and never falls back to 
   });
 
   await assert.rejects(
-    createCopcTileResourceProvider(source),
+    createCopcTileResourceProvider(source, { scanCompleteHierarchy: true }),
     (error) => error instanceof CopcTileResourceProviderError &&
       error.code === 'UNSUPPORTED_BOUNDS' &&
       error.conservativeBoundsResult.reasonCode === 'unsupported-horizontal-crs' &&
@@ -90,11 +91,11 @@ test('preserves unsupported conservative-bounds results and never falls back to 
 test('enforces an explicit Float32 bounds-padding budget and checks cancellation before point reads', async () => {
   const source = createBrowserFixtureSource(9);
   await assert.rejects(
-    createCopcTileResourceProvider(source, { maxEncoderPaddingMeters: 0 }),
+    createCopcTileResourceProvider(source, { scanCompleteHierarchy: true, maxEncoderPaddingMeters: 0 }),
     (error) => error instanceof CopcTileResourceProviderError && error.code === 'ENCODER_PADDING_LIMIT',
   );
 
-  const provider = await createCopcTileResourceProvider(source);
+  const provider = await createCopcTileResourceProvider(source, { scanCompleteHierarchy: true });
   const controller = new AbortController();
   controller.abort();
   await assert.rejects(
@@ -110,7 +111,7 @@ test('rejects resources after the Adapter source generation changes', async () =
   const base = createBrowserFixtureSource(11);
   let generation = 11;
   const source = { ...base, get sourceGeneration() { return generation; } };
-  const provider = await createCopcTileResourceProvider(source);
+  const provider = await createCopcTileResourceProvider(source, { scanCompleteHierarchy: true });
   generation += 1;
   assert.equal(provider.isCurrent(), false);
   await assert.rejects(
@@ -130,7 +131,7 @@ test('rejects point data from a different generation when the source omits its g
       return { ...view, context: { ...view.context, sourceGeneration: 8 } };
     },
   };
-  const provider = await createCopcTileResourceProvider(source);
+  const provider = await createCopcTileResourceProvider(source, { scanCompleteHierarchy: true });
 
   await assert.rejects(
     provider.getResource(getExplicitTileContentUri('root'), new AbortController().signal),
@@ -139,6 +140,20 @@ test('rejects point data from a different generation when the source omits its g
       error.conservativeBoundsResult.sourceGeneration === 7,
   );
   assert.deepEqual(base.diagnostics.nodes, ['root']);
+});
+
+test('requires explicit opt-in before scanning or materializing the full hierarchy', async () => {
+  const source = createBrowserFixtureSource(12);
+
+  for (const options of [{}, { scanCompleteHierarchy: false }]) {
+    await assert.rejects(
+      createCopcTileResourceProvider(source, options),
+      (error) => error instanceof CopcTileResourceProviderError && error.code === 'FULL_HIERARCHY_SCAN_NOT_ENABLED',
+    );
+  }
+  assert.equal(source.diagnostics.hierarchyPages, 0);
+  assert.equal(source.diagnostics.conservativeBounds, 0);
+  assert.deepEqual(source.diagnostics.nodes, []);
 });
 
 test('computes Float32 reconstruction padding from bounds before content is decoded', () => {

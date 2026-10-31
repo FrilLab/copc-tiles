@@ -404,7 +404,7 @@ window.verifyLiveProviderFailsClosed = async ({ url, backend = 'copc-js' }) => {
       ownsSource: false,
     });
     try {
-      await createCopcTileResourceProvider(connector);
+      await createCopcTileResourceProvider(connector, { scanCompleteHierarchy: true });
       return { created: true, hierarchyPageReads, pointReadCalls };
     } catch (error) {
       return {
