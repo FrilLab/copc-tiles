@@ -1,5 +1,8 @@
 import { open, readFile, stat } from 'node:fs/promises';
-import { extname, resolve, sep } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, extname, join, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig, type Plugin } from 'vite';
 import { createTileResourceServer, type TileResourceProvider } from '../../src/resources/tileResourceServer.js';
 import { createCopcTileResourceProvider } from '../../src/resources/copcTileResourceProvider.js';
@@ -21,7 +24,9 @@ const realCopcPaths = new Map<string, string | undefined>([
 ]);
 const browserPort = Number(process.env.COPC_TILES_BROWSER_PORT ?? 4173);
 const browserOrigin = `http://127.0.0.1:${browserPort}`;
-const cesiumBuild = resolve(process.cwd(), 'node_modules/cesium/Build/Cesium');
+const root = fileURLToPath(new URL('../..', import.meta.url));
+const packageRequire = createRequire(import.meta.url);
+const cesiumBuild = resolve(findPackageDirectory('cesium'), 'Build/Cesium');
 const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
@@ -254,7 +259,7 @@ function browserResourcesPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [browserResourcesPlugin()],
-  root: process.cwd(),
+  root,
   appType: 'spa',
   server: {
     host: '127.0.0.1',
@@ -265,3 +270,17 @@ export default defineConfig({
     CESIUM_BASE_URL: JSON.stringify('/Cesium/'),
   },
 });
+
+function findPackageDirectory(packageName: string): string {
+  let directory = dirname(packageRequire.resolve(packageName));
+  while (true) {
+    try {
+      const manifest = JSON.parse(readFileSync(join(directory, 'package.json'), 'utf8')) as { name?: string };
+      if (manifest.name === packageName) return directory;
+    } catch {}
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  throw new Error(`Could not locate the installed ${packageName} package from this package or its workspace ancestors.`);
+}

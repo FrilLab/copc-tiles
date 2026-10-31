@@ -90,6 +90,43 @@ the package integrity and test environment. CesiumJS `1.146.0`, Three.js
 `0.186.1`, `3d-tiles-renderer` `0.5.3`, and Chromium are tested points, not
 declared broad compatibility ranges.
 
+## Implemented behavior and integration limits
+
+The source-neutral engine provides read-only point views, Float64 ECEF to
+tile-local Float32 encoding, glTF 2.0 POINTS/GLB output, explicit Tilesets,
+fixture-driven implicit octree/subtree generation, and bounded resource
+serving. The package root and `./resources`, `./tileset`, and
+`./tileset/implicit` entrypoints do not load the Adapter, Cesium, or Three.
+The Adapter connector is isolated at `./adapter/copc-core`.
+
+The verified COPC connector uses only the public
+`@frillab/copc-adapter/core` API from exactly version `0.7.1`. Real Autzen
+and SoFi requested-node reads and single-node rendering were verified; a
+synthetic two-node provider exercises the live hierarchy-to-content path.
+`createCopcTileResourceProvider()` requires explicit
+`scanCompleteHierarchy: true` authorization for a bounded full hierarchy
+metadata scan. That scan does not decode point payloads: content points are
+prepared when their resource is requested. A supported conservative ECEF
+bound is required before the provider creates a spatially safe Tileset.
+
+Adapter 0.7.1 returns `unsupported-horizontal-crs` for projected Autzen
+EPSG:2992 and SoFi EPSG:32611. Tiles preserves that result and fails closed;
+real projected multi-node Tilesets and camera-driven Cesium/Three LOD remain
+unverified. Fixture implicit tiling is implemented, while a live COPC
+implicit subtree provider remains planned. The current limitations and T1–T12
+acceptance status are recorded in
+[`docs/implementation-status.md`](docs/implementation-status.md).
+
+The standalone package is being prepared for a possible future move to
+`mors119/copc-adapter/packages/tiles`. This refactor does not move or modify
+that repository and does not select between an Adapter `/tiles` export and a
+separately published package. The audited module responsibilities are in
+[`docs/migration-responsibility-matrix.md`](docs/migration-responsibility-matrix.md);
+`npm run verify` simulates the package under `packages/tiles` in a temporary
+npm Workspace and runs the package checks there. The staging results and the
+destination-only workspace setup are recorded in
+[`docs/migration-readiness.md`](docs/migration-readiness.md).
+
 ## Development policy
 
 See [AGENTS.md](AGENTS.md). Document actual validations, and stop at
