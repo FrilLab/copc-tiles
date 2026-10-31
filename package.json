@@ -60,6 +60,8 @@
     "test:browser": "playwright test --config test/browser/playwright.config.mjs",
     "validate:adapter-integration": "playwright test --config test/browser/playwright.config.mjs test/browser/adapter.real.spec.mjs",
     "test:packed-consumer": "node scripts/test-packed-consumer.mjs",
+    "test:migration-staging": "node scripts/test-migration-staging.mjs",
+    "verify": "node scripts/test-migration-staging.mjs",
     "bench:engine": "node --expose-gc --import tsx bench/engine.mjs"
   },
   "peerDependencies": {

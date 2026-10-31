@@ -8,10 +8,15 @@
   implicit 3D Tiles 1.1 hierarchies.
 - Serve addressable resources with bounded cache, cancellation, and source
   generation invalidation.
-- Add optional public COPC Adapter 0.6.0 integration and document the remaining
-  public bounds, E cache, CRS provenance, and hierarchy cancellation gaps.
+- Integrate the public COPC Adapter Core API verified at 0.7.1, with
+  conservative bounds and explicit unsupported-CRS results.
 - Validate fixtures in CesiumJS and Three.js browser integrations, and verify
-  one real bounded Autzen COPC node through public Adapter APIs.
+  bounded real Autzen and SoFi node reads through public Adapter APIs.
+- Make browser and packed-consumer checks resolve workspace-hoisted tools and
+  add a tracked-content staging verification for a future `packages/tiles`
+  workspace.
 
 This candidate has not been published. See `docs/implementation-status.md` for
-acceptance status, measured results, and release blockers.
+acceptance status, measured results, and release blockers. Migration evidence
+and destination prerequisites are recorded in
+`docs/migration-readiness.md`.

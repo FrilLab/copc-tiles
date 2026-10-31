@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const packageRequire = createRequire(import.meta.url);
+const viteCli = join(await findPackageDirectory('vite'), 'bin/vite.js');
+const typescriptCli = join(await findPackageDirectory('typescript'), 'bin/tsc');
 const tempRoot = await mkdtemp(join(tmpdir(), 'copc-tiles-packed-consumer-'));
 const packDirectory = join(tempRoot, 'packs');
 const consumerDirectory = join(tempRoot, 'renderers');
@@ -66,7 +70,7 @@ async function writeBundleFixture(directory, entryName, entrySource) {
 }
 
 async function bundleSources(directory) {
-  run(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--config', 'vite.config.mjs'], directory, 'packed consumer Vite bundle');
+  run(process.execPath, [viteCli, 'build', '--config', 'vite.config.mjs'], directory, 'packed consumer Vite bundle');
   const sources = [];
   const visit = async (path) => {
     for (const entry of await readdir(path, { withFileTypes: true })) {
@@ -144,7 +148,7 @@ try {
 
   await makeConsumer(engineOnlyDirectory, {
     '@frillab/copc-tiles': packedTiles,
-  }, ['engine-only.mjs']);
+  }, ['engine-only.mjs', 'engine-only.ts', 'tsconfig.engine-only.json']);
   for (const name of ['@frillab/copc-adapter', 'cesium', 'three']) {
     let installed = false;
     try {
@@ -154,6 +158,7 @@ try {
     assert.equal(installed, false, `Engine-only consumer does not install ${name}`);
   }
   run(process.execPath, ['engine-only.mjs'], engineOnlyDirectory, 'Adapter-free Tiles Engine consumer');
+  run(process.execPath, [typescriptCli, '--project', 'tsconfig.engine-only.json'], engineOnlyDirectory, 'Adapter-free strict NodeNext Tiles Engine typecheck');
   await writeBundleFixture(
     engineOnlyDirectory,
     'bundle.js',
@@ -167,4 +172,18 @@ try {
   console.log(`Packed Tiles tarball: ${packedNames[0]}`);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
+}
+
+async function findPackageDirectory(packageName) {
+  let directory = dirname(packageRequire.resolve(packageName));
+  while (true) {
+    try {
+      const manifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
+      if (manifest.name === packageName) return directory;
+    } catch {}
+    const parent = dirname(directory);
+    if (parent === directory) break;
+    directory = parent;
+  }
+  throw new Error(`Could not locate the installed ${packageName} package from this package or its workspace ancestors.`);
 }

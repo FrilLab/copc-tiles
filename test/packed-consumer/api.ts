@@ -3,6 +3,8 @@ import type {
   CopcConservativeNodeSource,
   CopcMetadata,
 } from '@frillab/copc-adapter/core';
+import type { ExplicitTilesetOptions, TilesetNodeInput } from '@frillab/copc-tiles/tileset';
+import type { ImplicitOctreeNodeInput, ImplicitOctreeOptions } from '@frillab/copc-tiles/tileset/implicit';
 import type * as AdapterRootTypes from '@frillab/copc-adapter';
 import type * as CesiumTypes from '@frillab/copc-adapter/cesium';
 import type * as ThreeTypes from '@frillab/copc-adapter/three';
@@ -16,6 +18,10 @@ type ConnectorUsesThePublicCapability = Assert<CopcCoreNodeSource extends TileCo
 type RendererTypesAreResolved = Assert<keyof typeof CesiumTypes extends string ? true : false>;
 type ThreeTypesAreResolved = Assert<keyof typeof ThreeTypes extends string ? true : false>;
 type RootTypesAreResolved = Assert<keyof typeof AdapterRootTypes extends string ? true : false>;
+type ExplicitTypesAreResolved = Assert<keyof ExplicitTilesetOptions extends string ? true : false>;
+type ExplicitNodeTypesAreResolved = Assert<keyof TilesetNodeInput extends string ? true : false>;
+type ImplicitTypesAreResolved = Assert<keyof ImplicitOctreeOptions extends string ? true : false>;
+type ImplicitNodeTypesAreResolved = Assert<keyof ImplicitOctreeNodeInput extends string ? true : false>;
 
 declare const source: CopcConservativeNodeSource;
 declare const providerOptions: CopcTileResourceProviderOptions;
@@ -29,4 +35,8 @@ export type PackedConsumerCompatibility =
   | ConnectorUsesThePublicCapability
   | RendererTypesAreResolved
   | ThreeTypesAreResolved
-  | RootTypesAreResolved;
+  | RootTypesAreResolved
+  | ExplicitTypesAreResolved
+  | ExplicitNodeTypesAreResolved
+  | ImplicitTypesAreResolved
+  | ImplicitNodeTypesAreResolved;
