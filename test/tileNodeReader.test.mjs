@@ -101,6 +101,16 @@ test('loads distinct requested node data once and returns results in request ord
   assert.deepEqual(source.nodeCalls.sort(), ['left', 'right']);
 });
 
+test('requested-node reads do not retain hierarchy records for later calls', async () => {
+  const source = new FixtureSource();
+  const reader = new TileNodeReader(source);
+
+  await reader.readNodes(['left']);
+  await assertReaderError('NODE_NOT_FOUND', reader.readNode(node('left')));
+  assert.deepEqual(source.pageCalls, ['root-page', 'left-page']);
+  assert.deepEqual(source.nodeCalls, ['left']);
+});
+
 test('does not treat incomplete child discovery as a proven missing node', async () => {
   const source = new FixtureSource(new Map([
     ['root-page', { nodes: [node('root', 0, false)], pages: [] }],

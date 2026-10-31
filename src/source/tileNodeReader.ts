@@ -62,6 +62,7 @@ export class TileNodeReader {
   readonly #sourceGeneration: number | undefined;
   readonly #transformGeneration: number;
   readonly #limits: Limits;
+  /** Metadata retained only for a complete, explicitly requested hierarchy scan. */
   readonly #resolvedNodes = new Map<string, TileHierarchyNode>();
 
   constructor(source: TileNodeSource, limits: TileNodeReaderLimits = {}) {
@@ -105,7 +106,6 @@ export class TileNodeReader {
       const nodeList = uniqueKeys.map((key) => {
         const node = nodes.get(key);
         if (!node) throw new TileNodeReaderError('NODE_NOT_FOUND', `Requested node "${key}" was not resolved.`, { nodeKey: key });
-        this.#resolvedNodes.set(node.key, node);
         return node;
       });
       this.#assertPointBudget(nodeList);
@@ -205,6 +205,7 @@ export class TileNodeReader {
         throw new TileNodeReaderError('INCOMPLETE_HIERARCHY', 'A complete hierarchy scan found a node without proven direct-child discovery.', { nodeKey: incomplete.key });
       }
       this.#assertCurrent(batch.signal);
+      this.#resolvedNodes.clear();
       for (const node of nodes.values()) this.#resolvedNodes.set(node.key, node);
       return Object.freeze({
         nodes: Object.freeze([...nodes.values()]),
@@ -222,7 +223,7 @@ export class TileNodeReader {
     }
   }
 
-  /** Load one previously resolved hierarchy record without traversing pages again. */
+  /** Load a node retained by an explicit readHierarchy() scan without traversing pages again. */
   async readNode(
     rawNode: TileHierarchyNode,
     selection: TilePointFieldSelection = {},
