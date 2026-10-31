@@ -12,6 +12,11 @@ export type TileLocalCoordinateOptions = Readonly<{
   maxRelativeError?: number;
 }>;
 
+export type TileEcefBounds = Readonly<{
+  minimum: readonly [number, number, number];
+  maximum: readonly [number, number, number];
+}>;
+
 export type TileLocalPositionResult = Readonly<{
   pointCount: number;
   /** glTF Y-up POSITION values; 3D Tiles applies its standard Y-up to Z-up rotation. */
@@ -32,6 +37,7 @@ export type TilePrecisionErrorCode =
   | 'INVALID_VIEW'
   | 'INVALID_ECEF'
   | 'INVALID_ORIGIN'
+  | 'INVALID_BOUNDS'
   | 'INVALID_ERROR_BUDGET'
   | 'PRECISION_BUDGET_EXCEEDED';
 
@@ -57,6 +63,46 @@ export class TilePrecisionError extends Error {
 
 const DEFAULT_MAX_ABSOLUTE_ERROR_METERS = 0.01;
 const DEFAULT_MAX_RELATIVE_ERROR = 1e-7;
+
+/**
+ * Return an a priori Euclidean Float32 rounding bound for a tile-local ECEF
+ * origin at the center of a conservative world-space AABB. This bound is
+ * based on the maximum local component magnitude, not on decoded samples.
+ */
+export function getFloat32EcefReconstructionErrorBound(bounds: TileEcefBounds): number {
+  if (
+    !bounds ||
+    !Array.isArray(bounds.minimum) || !Array.isArray(bounds.maximum) ||
+    bounds.minimum.length !== 3 || bounds.maximum.length !== 3 ||
+    ![...bounds.minimum, ...bounds.maximum].every(Number.isFinite) ||
+    bounds.minimum.some((minimum, axis) => minimum > bounds.maximum[axis])
+  ) {
+    throw new TilePrecisionError('INVALID_BOUNDS', 'ECEF bounds must contain finite ordered three-component vectors.');
+  }
+  const perAxisHalfUlp: number[] = [];
+  for (let axis = 0; axis < 3; axis += 1) {
+    const minimum = bounds.minimum[axis];
+    const maximum = bounds.maximum[axis];
+    const origin = minimum + (maximum - minimum) / 2;
+    const halfExtent = (maximum - minimum) / 2;
+    const subtractionSafety = Number.EPSILON * Math.max(1, Math.abs(minimum), Math.abs(maximum), Math.abs(origin)) * 8;
+    const maximumLocalMagnitude = halfExtent + subtractionSafety;
+    if (!Number.isFinite(maximumLocalMagnitude) || maximumLocalMagnitude > 3.4028234663852886e38) {
+      throw new TilePrecisionError('INVALID_BOUNDS', 'ECEF tile-local extent is outside the finite Float32 range.');
+    }
+    if (maximumLocalMagnitude === 0 || maximumLocalMagnitude < 2 ** -126) {
+      perAxisHalfUlp.push(2 ** -150);
+    } else {
+      const exponent = Math.floor(Math.log2(maximumLocalMagnitude));
+      perAxisHalfUlp.push(2 ** (exponent - 24));
+    }
+  }
+  const result = Math.hypot(perAxisHalfUlp[0], perAxisHalfUlp[1], perAxisHalfUlp[2]);
+  if (!Number.isFinite(result)) {
+    throw new TilePrecisionError('INVALID_BOUNDS', 'ECEF Float32 reconstruction error bound is not finite.');
+  }
+  return result;
+}
 
 /**
  * Converts WGS 84 ECEF Float64 positions to tile-local Float32 glTF positions.

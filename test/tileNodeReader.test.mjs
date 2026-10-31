@@ -115,6 +115,14 @@ test('reports a missing node only after complete bounded hierarchy traversal', a
   await assertReaderError('NODE_NOT_FOUND', new TileNodeReader(source).readNodes(['unknown']));
 });
 
+test('does not read point ranges for a caller-fabricated hierarchy node', async () => {
+  const source = new FixtureSource();
+  const reader = new TileNodeReader(source);
+  await assertReaderError('NODE_NOT_FOUND', reader.readNode(node('fabricated')));
+  assert.deepEqual(source.nodeCalls, []);
+  assert.deepEqual(source.pageCalls, []);
+});
+
 test('stops at the configured hierarchy page bound', async () => {
   const source = new FixtureSource(new Map([
     ['root-page', { nodes: [node('root', 0, false)], pages: [page('p1', 32), page('p2', 64), page('p3', 96)] }],

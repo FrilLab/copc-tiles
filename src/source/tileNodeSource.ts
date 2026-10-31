@@ -115,10 +115,14 @@ export type TileConservativeBoundsResult = Readonly<{
 
 export interface TileNodeSource {
   readonly sourceIdentity: string;
+  /** Adapter source generation when available; changes invalidate prior reads. */
+  readonly sourceGeneration?: number;
   readonly transformGeneration: number;
   /** False after close, source replacement, or a transform-policy change. */
   isCurrent?(): boolean;
   getRootHierarchyPage(): TileHierarchyPage;
+  /** Optional source-space bounds for validating conservative-result provenance. */
+  getNodeCellBounds?(nodeKey: string): TileSourceCellBounds;
   /** Implementations should honor the signal; synchronous decoders may only reject after the current decode finishes. */
   loadHierarchyPage(page: TileHierarchyPage, signal?: AbortSignal): Promise<TileHierarchyPageResult>;
   loadNode(
@@ -126,10 +130,14 @@ export interface TileNodeSource {
     selection: TilePointFieldSelection,
     signal?: AbortSignal,
   ): Promise<TilePointView>;
+  /** Close only when ownership has explicitly been transferred to a provider. */
+  close?(): void | Promise<void>;
 }
 
 /** Optional metadata-only capability used to gate safe multi-node Tilesets. */
 export interface TileConservativeNodeSource extends TileNodeSource {
+  /** Adapter/source identity carried inside conservative-bounds provenance, when distinct from the Tiles caller identity. */
+  readonly conservativeBoundsSourceIdentity?: string;
   /**
    * Bounds the complete source cell and its spatial descendants when
    * supported. This operation must not read points or issue network requests.
@@ -156,6 +164,18 @@ export type TileNodeReaderLimits = Readonly<{
 
 export type TileNodeReadOptions = Readonly<{
   signal?: AbortSignal;
+}>;
+
+/** Result of an explicit, bounded metadata-only hierarchy scan. */
+export type TileNodeHierarchy = Readonly<{
+  nodes: readonly TileHierarchyNode[];
+  hierarchyPagesRead: number;
+  hierarchyPageBytesRead: number;
+}>;
+
+export type TileHierarchyScanOptions = TileNodeReadOptions & Readonly<{
+  /** Called once for each validated node before following additional pages. */
+  onNode?: (node: TileHierarchyNode) => void;
 }>;
 
 export type TileNodeReaderErrorCode =

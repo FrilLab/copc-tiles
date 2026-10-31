@@ -40,6 +40,6 @@ also passed the Khronos validator, and Three.js read its RGB, intensity and
 classification data through the standard GLB/metadata plugins. The published
 Adapter 0.7.1 `/core` accepts exact named Extra Bytes on `copc-js` when the
 LAS descriptor permits them; Rust/WASM rejects non-empty requests. Real named
-Extra Bytes were not exercised. SoFi was unavailable in this revalidation;
-prior source attributes are historical and do not count as current evidence.
-See the [versioned API matrix](./adapter-api-compatibility.md).
+Extra Bytes were not exercised. The current SoFi run verified position,
+intensity and classification on both backends, but it did not establish
+additional Extra Bytes or GPS/return metadata. See the [versioned API matrix](./adapter-api-compatibility.md).

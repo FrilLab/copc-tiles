@@ -123,6 +123,7 @@ export type TileNodeContext = Readonly<{
 
 export type TileViewExpectation = Readonly<{
   sourceIdentity: string;
+  sourceGeneration?: number;
   transformGeneration: number;
 }>;
 
@@ -546,11 +547,17 @@ function snapshotAndValidateContext(
   if (!Number.isSafeInteger(expected.transformGeneration) || expected.transformGeneration < 0) {
     fail('INVALID_PROVENANCE', 'Expected transformGeneration must be a non-negative safe integer.', 'transformGeneration');
   }
+  if (expected.sourceGeneration !== undefined && (!Number.isSafeInteger(expected.sourceGeneration) || expected.sourceGeneration < 0)) {
+    fail('INVALID_PROVENANCE', 'Expected sourceGeneration must be a non-negative safe integer.', 'sourceGeneration');
+  }
   if (value.sourceIdentity !== expected.sourceIdentity) {
     fail('STALE_SOURCE', 'Point data belongs to a different source identity.', 'sourceIdentity');
   }
   if (value.transformGeneration !== expected.transformGeneration) {
     fail('STALE_GENERATION', 'Point data belongs to a stale transform generation.', 'transformGeneration');
+  }
+  if (expected.sourceGeneration !== undefined && value.sourceGeneration !== expected.sourceGeneration) {
+    fail('STALE_GENERATION', 'Point data belongs to a stale source generation.', 'sourceGeneration');
   }
 
   const sourceCrs = snapshotCrsEvidence(value.sourceCrs);

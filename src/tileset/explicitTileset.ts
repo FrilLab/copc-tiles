@@ -228,7 +228,7 @@ export function createExplicitTileset(
       transform: [...createTileTranslationTransform(item.origin, parentOrigin)],
     };
     if (item.node.pointCount > 0) {
-      const content = { uri: contentUri(item.node.key), boundingVolume: { box: [...box] } };
+      const content = { uri: getExplicitTileContentUri(item.node.key), boundingVolume: { box: [...box] } };
       tile.content = content;
     }
     if (item.children.length > 0) {
@@ -319,7 +319,11 @@ function halfDiagonal(halfExtents: Float64Array): number {
   return Math.hypot(halfExtents[0], halfExtents[1], halfExtents[2]);
 }
 
-function contentUri(nodeKey: string): string {
+/** Stable path used by explicit COPC content resources. */
+export function getExplicitTileContentUri(nodeKey: string): string {
+  if (typeof nodeKey !== 'string' || nodeKey.trim() === '' || new TextEncoder().encode(nodeKey).byteLength > 256) {
+    throw new ExplicitTilesetError('INVALID_INPUT', 'Tile content node keys must be non-empty UTF-8 strings no larger than 256 bytes.');
+  }
   const bytes = new TextEncoder().encode(nodeKey);
   const safeKey = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
   return `content/${safeKey}.glb`;

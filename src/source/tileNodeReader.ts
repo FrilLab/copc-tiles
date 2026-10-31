@@ -7,8 +7,10 @@ import {
 import {
   TileNodeReaderError,
   type TileHierarchyNode,
+  type TileHierarchyScanOptions,
   type TileHierarchyPage,
   type TileHierarchyPageResult,
+  type TileNodeHierarchy,
   type TileNodeReadOptions,
   type TileNodeReaderLimits,
   type TileNodeSource,
@@ -57,8 +59,10 @@ type Limits = Readonly<{ [Key in keyof typeof DEFAULT_LIMITS]: number }>;
 export class TileNodeReader {
   readonly #source: TileNodeSource;
   readonly #sourceIdentity: string;
+  readonly #sourceGeneration: number | undefined;
   readonly #transformGeneration: number;
   readonly #limits: Limits;
+  readonly #resolvedNodes = new Map<string, TileHierarchyNode>();
 
   constructor(source: TileNodeSource, limits: TileNodeReaderLimits = {}) {
     if (!source || typeof source !== 'object') {
@@ -70,8 +74,12 @@ export class TileNodeReader {
     if (!Number.isSafeInteger(source.transformGeneration) || source.transformGeneration < 0) {
       throw new TileNodeReaderError('INVALID_REQUEST', 'transformGeneration must be a non-negative safe integer.');
     }
+    if (source.sourceGeneration !== undefined && (!Number.isSafeInteger(source.sourceGeneration) || source.sourceGeneration < 0)) {
+      throw new TileNodeReaderError('INVALID_REQUEST', 'sourceGeneration must be a non-negative safe integer when provided.');
+    }
     this.#source = source;
     this.#sourceIdentity = source.sourceIdentity;
+    this.#sourceGeneration = source.sourceGeneration;
     this.#transformGeneration = source.transformGeneration;
     this.#limits = normalizeLimits(limits);
   }
@@ -97,6 +105,7 @@ export class TileNodeReader {
       const nodeList = uniqueKeys.map((key) => {
         const node = nodes.get(key);
         if (!node) throw new TileNodeReaderError('NODE_NOT_FOUND', `Requested node "${key}" was not resolved.`, { nodeKey: key });
+        this.#resolvedNodes.set(node.key, node);
         return node;
       });
       this.#assertPointBudget(nodeList);
@@ -112,6 +121,134 @@ export class TileNodeReader {
         result.set(node.key, view);
       }
       return result;
+    } catch (error) {
+      batch.controller.abort();
+      if (options.signal?.aborted) {
+        throw new TileNodeReaderError('ABORTED', 'Tile node read was cancelled.');
+      }
+      throw error;
+    } finally {
+      batch.dispose();
+    }
+  }
+
+  /**
+   * Explicitly scan every hierarchy page without reading point payloads.
+   * This is opt-in and bounded by the same page, byte, and node limits as
+   * requested-node reads. Every node must certify complete child discovery.
+   */
+  async readHierarchy(options: TileHierarchyScanOptions = {}): Promise<TileNodeHierarchy> {
+    const batch = createBatchSignal(options.signal);
+    try {
+      this.#assertCurrent(batch.signal);
+      const rootPage = validatePage(this.#source.getRootHierarchyPage(), this.#limits);
+      const queue: TileHierarchyPage[] = [rootPage];
+      const queuedPageSignatures = new Map<string, string>([[rootPage.key, pageSignature(rootPage)]]);
+      const loadedPages = new Set<string>();
+      const nodes = new Map<string, TileHierarchyNode>();
+      let pageBytes = 0;
+
+      while (queue.length > 0) {
+        this.#assertCurrent(batch.signal);
+        const page = queue.shift();
+        if (!page) break;
+        const signature = pageSignature(page);
+        if (queuedPageSignatures.get(page.key) !== signature) {
+          throw new TileNodeReaderError('INVALID_HIERARCHY_PAGE', 'A hierarchy page key refers to conflicting byte ranges.', { pageKey: page.key });
+        }
+        if (loadedPages.has(page.key)) continue;
+        if (loadedPages.size >= this.#limits.maxHierarchyPages) {
+          throw new TileNodeReaderError('HIERARCHY_LIMIT', `Hierarchy page limit ${this.#limits.maxHierarchyPages} reached.`, { pageKey: page.key });
+        }
+        pageBytes += page.pageLength;
+        if (!Number.isSafeInteger(pageBytes) || pageBytes > this.#limits.maxTotalHierarchyPageBytes) {
+          throw new TileNodeReaderError('HIERARCHY_LIMIT', `Hierarchy reads exceed ${this.#limits.maxTotalHierarchyPageBytes} bytes.`, { pageKey: page.key });
+        }
+        loadedPages.add(page.key);
+        const rawResult = await this.#source.loadHierarchyPage(page, batch.signal);
+        this.#assertCurrent(batch.signal);
+        const result = validatePageResult(rawResult, page, this.#limits);
+        for (const rawNode of result.nodes) {
+          const node = validateNode(rawNode, this.#limits);
+          const prior = nodes.get(node.key);
+          if (prior && !sameNode(prior, node)) {
+            throw new TileNodeReaderError('CONFLICTING_NODE', 'A hierarchy node key was returned with conflicting metadata.', { nodeKey: node.key, pageKey: page.key });
+          }
+          if (!prior && nodes.size >= this.#limits.maxHierarchyNodes) {
+            throw new TileNodeReaderError('HIERARCHY_LIMIT', `Hierarchy traversal exceeds ${this.#limits.maxHierarchyNodes} nodes.`, { pageKey: page.key });
+          }
+          nodes.set(node.key, node);
+          if (!prior) options.onNode?.(node);
+        }
+        for (const rawChildPage of result.pages) {
+          const childPage = validatePage(rawChildPage, this.#limits);
+          const childSignature = pageSignature(childPage);
+          const priorSignature = queuedPageSignatures.get(childPage.key);
+          if (priorSignature !== undefined && priorSignature !== childSignature) {
+            throw new TileNodeReaderError('INVALID_HIERARCHY_PAGE', 'A hierarchy page key refers to conflicting byte ranges.', { pageKey: childPage.key });
+          }
+          if (!priorSignature) {
+            if (queuedPageSignatures.size >= this.#limits.maxHierarchyPages) {
+              throw new TileNodeReaderError('HIERARCHY_LIMIT', `Discovered hierarchy pages exceed ${this.#limits.maxHierarchyPages}.`, { pageKey: childPage.key });
+            }
+            queuedPageSignatures.set(childPage.key, childSignature);
+            queue.push(childPage);
+          }
+        }
+      }
+
+      if (nodes.size === 0) {
+        throw new TileNodeReaderError('INVALID_HIERARCHY_PAGE', 'The loaded hierarchy contains no nodes.');
+      }
+      const incomplete = [...nodes.values()].find((node) => node.childrenComplete !== true);
+      if (incomplete) {
+        throw new TileNodeReaderError('INCOMPLETE_HIERARCHY', 'A complete hierarchy scan found a node without proven direct-child discovery.', { nodeKey: incomplete.key });
+      }
+      this.#assertCurrent(batch.signal);
+      for (const node of nodes.values()) this.#resolvedNodes.set(node.key, node);
+      return Object.freeze({
+        nodes: Object.freeze([...nodes.values()]),
+        hierarchyPagesRead: loadedPages.size,
+        hierarchyPageBytesRead: pageBytes,
+      });
+    } catch (error) {
+      batch.controller.abort();
+      if (options.signal?.aborted) {
+        throw new TileNodeReaderError('ABORTED', 'Tile hierarchy scan was cancelled.');
+      }
+      throw error;
+    } finally {
+      batch.dispose();
+    }
+  }
+
+  /** Load one previously resolved hierarchy record without traversing pages again. */
+  async readNode(
+    rawNode: TileHierarchyNode,
+    selection: TilePointFieldSelection = {},
+    options: TileNodeReadOptions = {},
+  ): Promise<TilePointView> {
+    const fields = snapshotTilePointFieldSelection(selection);
+    const extraDimensionCount = fields.attributes?.extraDimensions?.length ?? 0;
+    if (extraDimensionCount > this.#limits.maxSelectedExtraDimensions) {
+      throw new TileNodeReaderError('REQUEST_LIMIT', `Requested ${extraDimensionCount} extra dimensions; limit is ${this.#limits.maxSelectedExtraDimensions}.`);
+    }
+    const node = validateNode(rawNode, this.#limits);
+    const knownNode = this.#resolvedNodes.get(node.key);
+    if (!knownNode || !sameNode(knownNode, node)) {
+      throw new TileNodeReaderError('NODE_NOT_FOUND', 'Point data can only be loaded for a node resolved from this source hierarchy.', { nodeKey: node.key });
+    }
+    this.#assertPointBudget([node]);
+    const batch = createBatchSignal(options.signal);
+    try {
+      this.#assertCurrent(batch.signal);
+      const views = await this.#loadNodeViews([node], fields, batch);
+      this.#assertCurrent(batch.signal);
+      const view = views.get(node.key);
+      if (!view) {
+        throw new TileNodeReaderError('NODE_CONTENT_MISMATCH', 'A requested node has no loaded point view.', { nodeKey: node.key });
+      }
+      return view;
     } catch (error) {
       batch.controller.abort();
       if (options.signal?.aborted) {
@@ -258,6 +395,7 @@ export class TileNodeReader {
           this.#assertCurrent(batch.signal);
           const view = validateTilePointView(rawView, {
             sourceIdentity: this.#sourceIdentity,
+            ...(this.#sourceGeneration === undefined ? {} : { sourceGeneration: this.#sourceGeneration }),
             transformGeneration: this.#transformGeneration,
           }, selection);
           if (view.context.nodeKey !== node.key || view.pointCount !== node.pointCount) {
@@ -297,6 +435,7 @@ export class TileNodeReader {
     assertNotAborted(signal);
     if (
       this.#source.sourceIdentity !== this.#sourceIdentity ||
+      this.#source.sourceGeneration !== this.#sourceGeneration ||
       this.#source.transformGeneration !== this.#transformGeneration ||
       this.#source.isCurrent?.() === false
     ) {

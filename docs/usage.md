@@ -4,8 +4,8 @@ COPC Tiles is a source-neutral 3D Tiles engine. Its optional Adapter connector
 uses the renderer-neutral public `@frillab/copc-adapter/core` API. The adapter
 source still owns COPC ranges, hierarchy parsing, LAZ decode, and CRS/vertical
 preparation. Tiles provides bounded reads for explicitly requested node keys,
-encoding, tileset primitives, and resource serving; this review candidate does
-not yet connect live COPC hierarchy requests to production multi-node Tiles LOD.
+encoding, a live explicit provider for sources with supported conservative
+bounds, and resource serving. It does not schedule camera-driven LOD.
 
 ```ts
 import { createCopcCoreNodeSource } from '@frillab/copc-tiles/adapter/copc-core';
@@ -41,6 +41,36 @@ try {
   source.close();
 }
 ```
+
+For a source whose hierarchy cells all have supported conservative ECEF
+bounds, the live provider creates the explicit Tileset from bounded hierarchy
+metadata and reads point data only when its content URI is requested:
+
+```ts
+import {
+  createCopcTileResourceProvider,
+  createTileResourceServer,
+} from '@frillab/copc-tiles/resources';
+
+const provider = await createCopcTileResourceProvider(source, {
+  readerLimits: { maxHierarchyPages: 128, maxHierarchyNodes: 50_000 },
+  selection: { attributes: { rgb: true, intensity: true } },
+  maxEncoderPaddingMeters: 0.01,
+});
+const server = createTileResourceServer(provider, { closeProviderOnShutdown: true });
+// Mount server.handle(request) at the application's 3D Tiles URL.
+// Close it when the source is replaced or the application shuts down.
+await server.close();
+```
+
+Provider construction scans all hierarchy metadata needed to prove complete
+child discovery and checks every cell bound before returning. Any unsupported
+result stops construction and remains available on
+`CopcTileResourceProviderError.conservativeBoundsResult`. It never falls back
+to decoded-point bounds. The provider does not generate implicit subtrees or
+perform camera-driven requests. Real projected Autzen (EPSG:2992) and SoFi
+(EPSG:32611) are rejected by Adapter 0.7.1, so they cannot use this live
+multi-node path yet.
 
 The connector preserves the Adapter source and transform generations, its
 immutable transform plan, actual field availability, and zero-copy ECEF

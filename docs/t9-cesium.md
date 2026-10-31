@@ -43,18 +43,22 @@ The original test wrapper was culled because it declared `geometricError: 0`;
 Cesium treated the root as already meeting its screen-space target and issued
 no content request. The wrapper now uses the measured decoded-node bounds and
 a non-zero root error, and uses the encoder's origin/transform. This is a
-meaningful one-node test wrapper, not a production COPC hierarchy. The test
-pre-generates the single node before Cesium starts. It does not establish
-on-demand node acquisition, multi-level hierarchy or production LOD. Adapter
-0.7.1 separately reports `unsupported-horizontal-crs` for the real Autzen
-EPSG:2992 source-cell bounds. No unsupported cell bound is replaced with the
-decoded-point content bound. See the [bounds/API evidence](./adapter-api-compatibility.md).
+meaningful one-node test wrapper, not a production COPC hierarchy. Separately,
+the Cesium fixture now consumes the new live explicit provider over a synthetic
+two-node source; it verifies metadata-only Tileset creation, HTTP content URI
+requests, child rendering, camera movement, and cleanup. Real SoFi node
+`2-3-0-0` (1,131 points) was also served to Cesium from the public COPC source
+after bounded hierarchy/point reads. Both real projected sources remain
+unsupported for conservative bounds: Autzen EPSG:2992 and SoFi EPSG:32611.
+The real-source checks still do not establish safe live multi-node COPC LOD.
+No unsupported cell bound is replaced with a decoded-point bound. See the
+[bounds/API evidence](./adapter-api-compatibility.md).
 
 ## Acceptance boundary
 
-Fixture and real one-node Autzen rendering pass in headless Chromium with
-SwiftShader. Multi-level COPC LOD, zoom-driven real node selection, comparison
-against Direct rendering, representative GPU performance, and source switching
-during a renderer request remain unverified. Strict packed NodeNext consumers
-now pass; projected multi-node bounds and live LOD remain the T9 blockers.
-T9 therefore remains partial.
+Synthetic two-node live-provider and real selected-node Autzen/SoFi rendering
+pass in headless Chromium with SwiftShader. Multi-level real COPC LOD,
+zoom-driven real node selection, comparison against Direct rendering,
+representative GPU performance, and source switching during a renderer
+request remain unverified. Strict packed NodeNext consumers pass; projected
+multi-node bounds and real live LOD remain the T9 blockers. T9 remains partial.

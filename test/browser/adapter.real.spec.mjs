@@ -8,6 +8,26 @@ import tilesValidator from '3d-tiles-validator';
 import { resetServerStats } from './browser-utils.mjs';
 
 for (const backend of ['copc-js', 'rust']) {
+  test(`real Autzen ${backend} live provider rejects projected bounds before point reads`, async ({ page }) => {
+    test.skip(!process.env.COPC_TILES_AUTZEN, 'Set COPC_TILES_AUTZEN to the verified Autzen COPC sample.');
+    test.setTimeout(120_000);
+    await page.goto('/test/browser/adapter.html');
+    const result = await page.evaluate((selectedBackend) => window.verifyLiveProviderFailsClosed({
+      url: '/__copc/autzen.copc.laz',
+      backend: selectedBackend,
+    }), backend);
+    assert.equal(result.created, false);
+    assert.equal(result.errorName, 'CopcTileResourceProviderError');
+    assert.equal(result.errorCode, 'UNSUPPORTED_BOUNDS');
+    assert.equal(result.nodeKey, '0-0-0-0');
+    assert.equal(result.conservativeBoundsResult.status, 'unsupported');
+    assert.equal(result.conservativeBoundsResult.reasonCode, 'unsupported-horizontal-crs');
+    assert.equal(result.conservativeBoundsResult.sourceCoordinateSystem, 'copc-source');
+    assert.equal(result.hierarchyPageReads, 1);
+    assert.equal(result.pointReadCalls, 0);
+    console.log(`Autzen live provider ${backend}: ${result.errorCode}/${result.conservativeBoundsResult.reasonCode}; hierarchy pages=${result.hierarchyPageReads}; point reads=${result.pointReadCalls}.`);
+  });
+
   test(`packed Adapter /core ${backend} source feeds real Autzen content to Cesium and Three.js`, async ({ page }) => {
     test.skip(!process.env.COPC_TILES_AUTZEN, 'Set COPC_TILES_AUTZEN to the verified Autzen COPC sample.');
     test.setTimeout(120_000);
