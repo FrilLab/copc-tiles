@@ -61,11 +61,11 @@ aborts its local requests; it closes the Core context only when it owns it.
 | Issue #2 criterion | Evidence / status |
 | --- | --- |
 | Requested keys without Direct scheduler | Implemented in `src/source/tileNodeReader.ts`; repository scan shows no `NodeSelector` or `StreamingManager` imports in the Tiles connector. |
-| Lazy hierarchy pages and bounded traversal | Fixture tests cover early stop, page limits, incomplete hierarchy, unsafe ranges, and missing nodes. Current Autzen hierarchy reads pass without full object downloads. A prior SoFi run is recorded in the 2026-10-29 release audit; SoFi was unavailable in this revalidation. |
+| Lazy hierarchy pages and bounded traversal | Fixture tests cover early stop, page limits, incomplete hierarchy, unsafe ranges, and missing/fabricated nodes. Ordinary requested-node reads do not retain hierarchy records after returning; only explicit bounded `readHierarchy()` retains records for subsequent node reads. Autzen and SoFi hierarchy reads pass without full object downloads. The live explicit provider scans metadata only after `scanCompleteHierarchy: true` and stays within page/byte/node limits; it decodes only requested content. |
 | Deduplicate node requests | Duplicate keys in one batch collapse to one point preparation; cross-call resource deduplication remains a T8 provider responsibility. |
 | Public prepared data path | Uses `CopcNodeSource.loadPreparedNodeData()` for all nodes. No `/cesium` fallback, copied decoder, point buffer rehydration, or duplicate CRS code. |
 | Cancellation and source lifecycle | Unit tests assert signals reach hierarchy and point methods, connector close aborts local work, owned context close is idempotent, and stale generations are rejected. |
-| Actual attributes and precise coordinates | Current Autzen returns position/intensity/classification/RGB on both backends; ECEF stays the exact Adapter Float64 buffer. SoFi was unavailable this revalidation. |
+| Actual attributes and precise coordinates | Autzen returns position/intensity/classification/RGB and SoFi returns position/intensity/classification on both backends; ECEF stays the exact Adapter Float64 buffer. |
 | Packed package contract | The actual Registry Adapter 0.7.1 tarball and packed Tiles artifact pass Node ESM, strict Bundler and strict NodeNext consumers. |
 
 ## Real browser evidence
@@ -81,11 +81,11 @@ backends in Chromium:
 - Both outputs passed Khronos glTF and CesiumGS 3D Tiles validators without
   errors/warnings and rendered in Cesium and Three.
 
-SoFi was unavailable for this milestone: no binary or `COPC_TILES_SOFI_URL` /
-`COPC_TILES_SECOND_COPC_URL` was configured, and both optional real-source
-browser cases were skipped. A previous run recorded SoFi hierarchy and
-three-node reads in [`release-audit-2026-10-29.md`](./release-audit-2026-10-29.md);
-that is historical evidence, not a result of this revalidation.
+SoFi was read directly from the public 2.03 GB object with bounded HTTP Range
+requests. Both backends visited one page (2,599 nodes) and decoded the three
+selected nodes at levels 2/3/4 with 1,131 / 7,690 / 6,975 points. The source
+is EPSG:32611 and its conservative bounds correctly remain unsupported, so
+these reads do not demonstrate real live multi-node Tileset generation.
 
 No File/Blob, real named Extra Bytes, explicit vertical grid,
 complete octree, or production multi-node LOD result is claimed. The public

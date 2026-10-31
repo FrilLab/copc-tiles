@@ -48,10 +48,14 @@ Fixture verification:
   CesiumGS 3D Tiles Validator against a generated tileset and GLB content.
 - `npm run typecheck` checks the exported TypeScript implementation.
 
-For supported geographic fixtures, encoder padding is required and applied
-using the measured maximum Float32 reconstruction error; the result does not
-claim to include that error. The existing one-node Autzen wrapper uses
-decoded-point bounds only for its already-decoded content node. It is a
-renderer placement check, not evidence for projected parent/child cell bounds
-or production LOD. No unsupported result falls back to those point bounds.
+For supported geographic fixtures, the Adapter bound does not include GLB
+Float32 reconstruction error. `createCopcTileResourceProvider` derives an
+error envelope for each content-bearing cell before point reads and propagates
+the largest descendant padding to ancestor volumes, including empty nodes. It
+then verifies decoded point containment and actual GLB error. A two-node live
+source passes the Khronos and CesiumGS validators and renders in the
+Cesium/Three fixtures. Real
+Autzen and SoFi are projected and remain unsupported; one-node renderer checks
+do not evidence projected parent/child cell bounds or real production LOD. No
+unsupported result falls back to decoded-point bounds.
 See the [packed API compatibility matrix](./adapter-api-compatibility.md).

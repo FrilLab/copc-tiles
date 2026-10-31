@@ -78,6 +78,7 @@ export class CopcCoreAdapterError extends Error {
  */
 export class CopcCoreNodeSource implements TileConservativeNodeSource {
   readonly sourceIdentity: string;
+  readonly conservativeBoundsSourceIdentity: string;
   readonly sourceGeneration: number;
   readonly transformGeneration: number;
   readonly transformPlan: CoordinateTransformPlan;
@@ -107,6 +108,7 @@ export class CopcCoreNodeSource implements TileConservativeNodeSource {
       throw new CopcCoreAdapterError('INVALID_SOURCE', 'Adapter transformGeneration must be a non-negative safe integer.');
     }
     this.#source = options.source;
+    this.conservativeBoundsSourceIdentity = options.source.source;
     this.#ownsSource = options.ownsSource ?? false;
     this.#isCurrentOverride = options.isCurrent;
     this.sourceIdentity = options.sourceIdentity;
@@ -221,7 +223,11 @@ export class CopcCoreNodeSource implements TileConservativeNodeSource {
       const view = createTilePointViewFromA(
         prepared.pointData,
         context,
-        { sourceIdentity: this.sourceIdentity, transformGeneration: this.transformGeneration },
+        {
+          sourceIdentity: this.sourceIdentity,
+          sourceGeneration: this.sourceGeneration,
+          transformGeneration: this.transformGeneration,
+        },
         selected,
       );
       if (view.pointCount !== node.pointCount || view.context.nodeKey !== node.key) {

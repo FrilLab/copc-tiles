@@ -2,9 +2,10 @@ import { open, readFile, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import { createTileResourceServer, type TileResourceProvider } from '../../src/resources/tileResourceServer.js';
-import { makeBrowserFixtureResources } from './fixture.js';
+import { createCopcTileResourceProvider } from '../../src/resources/copcTileResourceProvider.js';
+import { createBrowserFixtureSource } from './fixture.js';
 
-const resourceMap = makeBrowserFixtureResources();
+const resourceMap = new Map<string, Uint8Array>();
 const httpRequests: string[] = [];
 const providerReads: string[] = [];
 const copcRequests: Array<Readonly<{ method: string; range?: string }>> = [];
@@ -37,17 +38,26 @@ const MIME_TYPES: Readonly<Record<string, string>> = Object.freeze({
   '.glsl': 'text/plain; charset=utf-8',
 });
 
-const createFixtureProvider = (generation: number): TileResourceProvider => Object.freeze({
-  sourceIdentity: 'browser-fixture-source',
-  generation,
-  getResource: async (uri: string, signal: AbortSignal) => {
-    providerReads.push(uri);
-    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const bytes = resourceMap.get(uri);
-    return bytes === undefined ? undefined : bytes.slice();
-  },
-});
-let resourceServer = createTileResourceServer(createFixtureProvider(fixtureGeneration), {
+const createFixtureProvider = async (generation: number): Promise<TileResourceProvider> => {
+  const liveProvider = await createCopcTileResourceProvider(createBrowserFixtureSource(generation), {
+    scanCompleteHierarchy: true,
+    selection: { attributes: { rgb: true, intensity: true, classification: true } },
+    maxEncoderPaddingMeters: 0.01,
+  });
+  return Object.freeze({
+    sourceIdentity: liveProvider.sourceIdentity,
+    generation: liveProvider.generation,
+    isCurrent: liveProvider.isCurrent,
+    getResource: async (uri: string, signal: AbortSignal) => {
+      providerReads.push(uri);
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      const prebuilt = resourceMap.get(uri);
+      return prebuilt === undefined ? liveProvider.getResource(uri, signal) : prebuilt.slice();
+    },
+    close: () => liveProvider.close?.(),
+  });
+};
+let resourceServer = createTileResourceServer(await createFixtureProvider(fixtureGeneration), {
   basePath: '/fixture/',
   maxResourceBytes: 4 * 1024 * 1024,
   maxCacheBytes: 4 * 1024 * 1024,
@@ -65,7 +75,7 @@ function browserResourcesPlugin(): Plugin {
         if (pathname === '/__stats') {
           if (new URL(rawUrl, browserOrigin).searchParams.has('reset')) {
             fixtureGeneration += 1;
-            await resourceServer.switchSource(createFixtureProvider(fixtureGeneration));
+            await resourceServer.switchSource(await createFixtureProvider(fixtureGeneration));
             httpRequests.length = 0;
             providerReads.length = 0;
             copcRequests.length = 0;

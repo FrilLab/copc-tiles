@@ -2,7 +2,7 @@
 
 **COPC → standard 3D Tiles 1.1** as a standalone, optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter).
 
-> **Status: 0.1.0 conditional review candidate; not published.** This milestone pins and verifies the actual npm `@frillab/copc-adapter@0.7.1` package. Tiles exposes its conservative ECEF cell-bounds capability through the public `/core` connector. Generated WGS84 fixtures pass on both backends; real Autzen EPSG:2992 and projected EPSG:32611 fixtures fail closed as `unsupported-horizontal-crs`. Real Autzen remains a single-node rendering check; real SoFi was unavailable for this run. Projected bounds still block safe multi-node Tilesets for those datasets. See [`docs/implementation-status.md`](docs/implementation-status.md) and the [API compatibility matrix](docs/adapter-api-compatibility.md).
+> **Status: 0.1.0 conditional review candidate; not published.** This milestone pins and verifies npm `@frillab/copc-adapter@0.7.1` and adds a live explicit resource provider over its public `/core` contract. Generated WGS84 COPC fixtures verify conservative bounds; a synthetic two-node source exercises on-demand hierarchy-to-content flow in both renderers. Real Autzen EPSG:2992 and SoFi EPSG:32611 return `unsupported-horizontal-crs`; Autzen's live provider rejects before point reads. Projected bounds still block safe live multi-node Tilesets for these real datasets. T1–T12 remain open with documented acceptance gaps. See [`docs/implementation-status.md`](docs/implementation-status.md) and the [API compatibility matrix](docs/adapter-api-compatibility.md).
 
 ## Why separate?
 

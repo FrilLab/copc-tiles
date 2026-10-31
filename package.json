@@ -34,8 +34,8 @@
       "import": "./dist/adapter/copcCoreAdapter.js"
     },
     "./resources": {
-      "types": "./dist/resources/tileResourceServer.d.ts",
-      "import": "./dist/resources/tileResourceServer.js"
+      "types": "./dist/resources/index.d.ts",
+      "import": "./dist/resources/index.js"
     },
     "./tileset": {
       "types": "./dist/tileset/explicitTileset.d.ts",

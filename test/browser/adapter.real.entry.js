@@ -5,6 +5,7 @@ import {
 import { encodePointCloudGlb } from '../../src/gltf/pointCloudGlb.ts';
 import { CopcCoreNodeSource } from '../../src/adapter/copcCoreAdapter.ts';
 import { TileNodeReader } from '../../src/source/tileNodeReader.ts';
+import { createCopcTileResourceProvider } from '../../src/resources/copcTileResourceProvider.ts';
 
 const MAX_NODE_POINTS = 8192;
 const MAX_NODE_BYTES = 2 * 1024 * 1024;
@@ -364,5 +365,62 @@ window.verifyConservativeBounds = async ({ url, backend = 'copc-js', contextOpti
     connector?.close();
     source?.close();
     window.fetch = nativeFetch;
+  }
+};
+
+window.verifyLiveProviderFailsClosed = async ({ url, backend = 'copc-js' }) => {
+  let source;
+  let connector;
+  let hierarchyPageReads = 0;
+  let pointReadCalls = 0;
+  try {
+    source = await createCopcContext(url, backend, {
+      rangeValidation: 'strict',
+      maxRangeBytes: 16 * 1024 * 1024,
+      maxConcurrentRangeRequests: 2,
+    });
+    const instrumentedSource = new Proxy(source, {
+      get(target, property) {
+        const value = Reflect.get(target, property, target);
+        if (typeof value !== 'function') return value;
+        if (property === 'loadHierarchyPage') {
+          return (...args) => {
+            hierarchyPageReads += 1;
+            return value.apply(target, args);
+          };
+        }
+        if (property === 'loadPreparedNodeData') {
+          return (...args) => {
+            pointReadCalls += 1;
+            return value.apply(target, args);
+          };
+        }
+        return value.bind(target);
+      },
+    });
+    connector = new CopcCoreNodeSource({
+      source: instrumentedSource,
+      sourceIdentity: 'real-source-live-provider-check',
+      ownsSource: false,
+    });
+    try {
+      await createCopcTileResourceProvider(connector, { scanCompleteHierarchy: true });
+      return { created: true, hierarchyPageReads, pointReadCalls };
+    } catch (error) {
+      return {
+        created: false,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorCode: error?.code,
+        nodeKey: error?.nodeKey,
+        conservativeBoundsResult: error?.conservativeBoundsResult,
+        hierarchyPageReads,
+        pointReadCalls,
+        sourceGeneration: source.sourceGeneration,
+        transformGeneration: source.transformGeneration,
+      };
+    }
+  } finally {
+    connector?.close();
+    source?.close();
   }
 };

@@ -169,6 +169,14 @@ test('source changes and stale transform generations are rejected', () => {
   ));
 });
 
+test('rejects point views from a stale adapter source generation', () => {
+  assertViewError('STALE_GENERATION', () => createExperimentalETilePointView(
+    experimentalE(),
+    context({ sourceGeneration: 3 }),
+    { ...expected, sourceGeneration: 4 },
+  ));
+});
+
 test('unsafe point counts and malformed field selections are rejected', () => {
   assertViewError('INVALID_POINT_COUNT', () => createExperimentalETilePointView(
     experimentalE({ pointCount: Number.MAX_SAFE_INTEGER }), context(), expected,

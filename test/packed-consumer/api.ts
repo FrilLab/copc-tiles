@@ -8,6 +8,7 @@ import type * as CesiumTypes from '@frillab/copc-adapter/cesium';
 import type * as ThreeTypes from '@frillab/copc-adapter/three';
 import type { CopcCoreNodeSource } from '@frillab/copc-tiles/adapter/copc-core';
 import type { TileConservativeBoundsResult, TileConservativeNodeSource } from '@frillab/copc-tiles';
+import type { CopcTileResourceProviderOptions } from '@frillab/copc-tiles/resources';
 
 type Assert<T extends true> = T;
 type PublicBoundsArePreserved = Assert<CopcConservativeBoundsResult extends TileConservativeBoundsResult ? true : false>;
@@ -17,9 +18,11 @@ type ThreeTypesAreResolved = Assert<keyof typeof ThreeTypes extends string ? tru
 type RootTypesAreResolved = Assert<keyof typeof AdapterRootTypes extends string ? true : false>;
 
 declare const source: CopcConservativeNodeSource;
+declare const providerOptions: CopcTileResourceProviderOptions;
+const fullScanAuthorization: CopcTileResourceProviderOptions = { scanCompleteHierarchy: true };
 const metadata: CopcMetadata = source.getMetadata();
 const conservative: TileConservativeBoundsResult = source.getConservativeNodeEcefBounds('0-0-0-0');
-void [metadata, conservative];
+void [metadata, conservative, providerOptions, fullScanAuthorization];
 
 export type PackedConsumerCompatibility =
   | PublicBoundsArePreserved
