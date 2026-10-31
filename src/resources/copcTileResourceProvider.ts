@@ -184,6 +184,13 @@ export async function createCopcTileResourceProvider(
         const view = await reader.readNode(prepared.node, options.selection, { signal: operation.signal });
         assertNotAborted(operation.signal);
         assertSourceCurrent(source, sourceIdentity, sourceGeneration, expectedSourceGeneration, sourceTransformGeneration);
+        if (expectedSourceGeneration !== undefined && view.context.sourceGeneration !== expectedSourceGeneration) {
+          throw new CopcTileResourceProviderError(
+            'STALE_SOURCE',
+            `Node ${prepared.node.key} point data belongs to source generation ${String(view.context.sourceGeneration)}; conservative bounds belong to generation ${expectedSourceGeneration}.`,
+            { nodeKey: prepared.node.key, conservativeBoundsResult: prepared.conservativeBounds },
+          );
+        }
         assertPointsWithinBounds(view, prepared.conservativeBounds, prepared.node.key);
         const encoded = encodePointCloudGlb(view, encoderOptions(options, prepared));
         if (!encoded) return undefined;

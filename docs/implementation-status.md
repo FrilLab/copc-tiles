@@ -129,7 +129,7 @@ integration only, not a safe live multi-node Tileset demonstration.
 | `npm run typecheck` | Pass |
 | `npm run typecheck:adapter-core` | Pass |
 | `npm run build` | Pass |
-| `npm test` | 84 passed, 0 failed, 0 skipped on Node 18.20.8 and 22.14.0 after verified Sharp rebuild |
+| `npm test` | 85 passed, 0 failed, 0 skipped on Node 18.20.8 and 22.14.0 after verified Sharp rebuild |
 | `npm run validate:gltf` | 10 passed, including Khronos glTF validation |
 | `npm run validate:tileset` | 5 passed, including CesiumGS 3D Tiles validation |
 | `npm run validate:implicit` | 5 passed, including CesiumGS subtree validation |
@@ -151,21 +151,21 @@ construction was 0.011/0.005 ms; A/E prepare-and-encode was 20.594/19.937 ms.
 ## Package impact and release assessment
 
 The current Tiles `npm pack --dry-run` artifact contains the engine, connector
-and live provider only: 48 files, 91,571 bytes packed and 351,973 bytes
+and live provider only: 48 files, 91,655 bytes packed and 352,460 bytes
 unpacked. It
 contains no bundled dependencies. `@frillab/copc-adapter` is an optional peer
 and no renderer is a Tiles dependency. In clean packed consumers, installed
-file bytes measured 352,714 for Tiles alone, 5,592,771 for Adapter plus Tiles
-without renderers, and 194,218,576 for Adapter, Tiles, TypeScript, Cesium and
+file bytes measured 353,199 for Tiles alone, 5,593,256 for Adapter plus Tiles
+without renderers, and 194,219,061 for Adapter, Tiles, TypeScript, Cesium and
 Three. These are this machine's package file sizes, not filesystem block
 allocation.
 
 Vite 7.3.7 production bundles from the packed consumers show the Tiles Engine
-entry at 38.07 kB raw / 10.76 kB gzip and no Adapter, Cesium, or Three source
-modules. The Adapter Core entry bundles 335.82 kB JavaScript / 105.52 kB gzip
+entry at 38.07 kB raw / 10.75 kB gzip and no Adapter, Cesium, or Three source
+modules. The Adapter Core entry bundles 335.82 kB JavaScript / 104.99 kB gzip
 plus WASM assets of 214.35 kB and 866.88 kB; its graph contains no Tiles or
 renderer subpaths. Adapter `/cesium` and `/three` namespace consumer bundles
-measured 1,317.96 kB / 365.79 kB gzip and 652.34 kB / 191.05 kB gzip; both
+measured 1,317.96 kB / 363.58 kB gzip and 652.34 kB / 190.03 kB gzip; both
 graphs contain no Tiles modules. Vite also emits the Adapter WASM/worker
 assets for those Adapter entries. These representative bundles verify graph
 isolation, not complete application size or a before/after Adapter Direct

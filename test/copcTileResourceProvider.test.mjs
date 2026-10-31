@@ -120,6 +120,27 @@ test('rejects resources after the Adapter source generation changes', async () =
   assert.deepEqual(base.diagnostics.nodes, []);
 });
 
+test('rejects point data from a different generation when the source omits its generation', async () => {
+  const base = createBrowserFixtureSource(7);
+  const source = {
+    ...base,
+    sourceGeneration: undefined,
+    loadNode: async (...args) => {
+      const view = await base.loadNode(...args);
+      return { ...view, context: { ...view.context, sourceGeneration: 8 } };
+    },
+  };
+  const provider = await createCopcTileResourceProvider(source);
+
+  await assert.rejects(
+    provider.getResource(getExplicitTileContentUri('root'), new AbortController().signal),
+    (error) => error instanceof CopcTileResourceProviderError &&
+      error.code === 'STALE_SOURCE' &&
+      error.conservativeBoundsResult.sourceGeneration === 7,
+  );
+  assert.deepEqual(base.diagnostics.nodes, ['root']);
+});
+
 test('computes Float32 reconstruction padding from bounds before content is decoded', () => {
   const bounds = {
     minimum: [6378130, -10, -10],
