@@ -7,12 +7,12 @@ const fixture = (path) => 'TN:\nSF:' + path + '\nDA:1,1\nLF:1\nLH:1\nend_of_reco
 
 test('Tiles LCOV includes staged source and rewrites repo-relative paths', () => {
   const report = normalizeTilesLcov(
-    fixture('src/gltf/pointCloudGlb.ts') + fixture('file:///tmp/fixtures/packages/tiles/src/tileset/explicitTileset.ts'),
+    fixture('src/gltf/pointCloudGlb.ts') + fixture('file:///tmp/fixtures/src/tileset/explicitTileset.ts'),
     root,
   );
   assert.deepEqual([...report.matchAll(/^SF:(.*)$/gm)].map((m) => m[1]), [
-    'packages/tiles/src/gltf/pointCloudGlb.ts',
-    'packages/tiles/src/tileset/explicitTileset.ts',
+    'src/gltf/pointCloudGlb.ts',
+    'src/tileset/explicitTileset.ts',
   ]);
 });
 

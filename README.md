@@ -1,5 +1,7 @@
 # COPC Tiles
 
+[![Codecov](https://codecov.io/github/FrilLab/copc-tiles/graph/badge.svg)](https://app.codecov.io/github/FrilLab/copc-tiles)
+
 Create standard 3D Tiles 1.1 point-cloud content from COPC sources. COPC Tiles
 is an optional companion to [COPC Adapter](https://github.com/mors119/copc-adapter)
 for applications that need the 3D Tiles format. The source-neutral engine has
@@ -60,7 +62,7 @@ source.close();
 Remote COPC sources must allow HTTP Range requests and browser CORS from your
 application's origin. The complete setup, custom node sources, bounds options,
 and renderer integration are in the
-[usage guide](https://github.com/mors119/copc-adapter/blob/main/packages/tiles/docs/usage.md).
+[usage guide](https://github.com/FrilLab/copc-tiles/blob/main/docs/usage.md).
 
 ## What it provides
 
@@ -87,5 +89,5 @@ and renderer integration are in the
 
 See the [3D Tiles demo guide](https://github.com/mors119/copc-adapter/blob/main/apps/dev-viewer/docs/3d-tiles-demo.md)
 for a runnable CesiumJS and Three.js example, and the
-[API reference](https://github.com/mors119/copc-adapter/tree/main/packages/tiles/docs)
+[API reference](https://github.com/FrilLab/copc-tiles/tree/main/docs)
 for detailed options. Licensed under [Apache-2.0](LICENSE).

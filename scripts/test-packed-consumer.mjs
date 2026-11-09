@@ -150,8 +150,8 @@ try {
     assert.equal((await lstat(candidatePath)).isFile(), true, 'Adapter candidate artifact is a regular file');
     packedAdapterName = basename(candidatePath);
     packedAdapter = `file:${candidatePath}`;
-  } else {
-    const adapterWorkspace = resolve(process.env.COPC_ADAPTER_WORKSPACE_ROOT ?? resolve(root, '../adapter'));
+  } else if (process.env.COPC_ADAPTER_WORKSPACE_ROOT) {
+    const adapterWorkspace = resolve(process.env.COPC_ADAPTER_WORKSPACE_ROOT);
     runNpm(['pack', '--pack-destination', packDirectory], adapterWorkspace, 'Adapter 0.8.0 candidate npm pack');
     packedAdapterName = (await readdir(packDirectory)).find((name) => name.startsWith('frillab-copc-adapter-0.8.0.') && name.endsWith('.tgz'));
     if (!packedAdapterName) throw new Error('Adapter 0.8.0 candidate npm pack did not produce a tarball.');
@@ -193,6 +193,7 @@ try {
     console.log(`Adapter /${renderer} consumer bundle has no Tiles source modules.`);
   }
 
+  if (packedAdapter !== undefined) {
   await makeConsumer(candidateConsumerDirectory, {
     '@frillab/copc-adapter': packedAdapter,
     '@frillab/copc-tiles': packedTiles,
@@ -213,6 +214,8 @@ try {
   run(process.execPath, [candidateCompiler, '--project', 'tsconfig.bundler.json'], candidateConsumerDirectory, 'Adapter 0.8 candidate strict Bundler packed consumer typecheck');
   run(process.execPath, ['runtime.mjs'], candidateConsumerDirectory, 'Adapter 0.8 candidate packed consumer ESM imports');
   console.log(`Adapter 0.8 candidate consumer installed file bytes: ${await installBytes(candidateConsumerDirectory)}`);
+
+  }
 
   await makeConsumer(legacyConsumerDirectory, {
     '@frillab/copc-adapter': '0.7.1',
@@ -284,7 +287,7 @@ try {
   assert.equal(engineSources.some((source) => source.includes('/cesium') || source.includes('/three')), false, 'Tiles Engine bundle has no renderer modules');
   console.log(`Tiles Engine consumer installed file bytes: ${await installBytes(engineOnlyDirectory)}`);
   console.log(`Packed Tiles tarball: ${packedTilesName}`);
-  console.log(`Packed Adapter candidate tarball: ${packedAdapterName}`);
+  if (packedAdapterName) console.log(`Packed Adapter candidate tarball: ${packedAdapterName}`);
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
 }

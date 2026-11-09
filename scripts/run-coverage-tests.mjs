@@ -22,7 +22,7 @@ export function normalizeTilesLcov(report, sourceRoot) {
     if (path.startsWith('../') || path === '..' || isAbsolute(path)) continue;
     if (!path.startsWith('src/') || !/\.(?:[cm]?js|tsx?)$/.test(path)) continue;
     if (/\.(?:test|spec)\.[cm]?[jt]s$/.test(path)) continue;
-    records.push(record.replace(/^SF:.*$/m, 'SF:packages/tiles/' + path) + '\nend_of_record');
+    records.push(record.replace(/^SF:.*$/m, 'SF:' + path) + '\nend_of_record');
   }
   if (!records.length) throw new Error('No Tiles source records found in LCOV output.');
   return records.join('\n') + '\n';

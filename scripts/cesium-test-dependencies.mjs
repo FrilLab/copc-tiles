@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const repositoryRoot = resolve(packageRoot, '../..');
+const repositoryRoot = packageRoot;
 const [tilesManifest, repositoryLock] = await Promise.all([
   readFile(join(packageRoot, 'package.json'), 'utf8').then(JSON.parse),
   readFile(join(repositoryRoot, 'package-lock.json'), 'utf8').then(JSON.parse),

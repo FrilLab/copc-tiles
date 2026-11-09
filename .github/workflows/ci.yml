@@ -1,0 +1,35 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify source, browser and packed consumers (unit tests once)
+        env:
+          COPC_TILES_COVERAGE: '1'
+        run: npm run verify
+      - name: Upload Tiles Node coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage/lcov.info
+          flags: tiles-node
+          disable_search: true
+          use_oidc: true
+          fail_ci_if_error: false

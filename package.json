@@ -11,10 +11,9 @@
   "description": "Source-neutral 3D Tiles 1.1 engine for point clouds",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mors119/copc-adapter.git",
-    "directory": "packages/tiles"
+    "url": "git+https://github.com/FrilLab/copc-tiles.git"
   },
-  "homepage": "https://github.com/mors119/copc-adapter/tree/main/packages/tiles",
+  "homepage": "https://github.com/FrilLab/copc-tiles",
   "bugs": {
     "url": "https://github.com/FrilLab/copc-tiles/issues"
   },
@@ -60,8 +59,7 @@
     "test:browser": "playwright test --config test/browser/playwright.config.mjs",
     "validate:adapter-integration": "playwright test --config test/browser/playwright.config.mjs test/browser/adapter.real.spec.mjs",
     "test:packed-consumer": "node scripts/test-packed-consumer.mjs",
-    "test:migration-staging": "node scripts/test-migration-staging.mjs",
-    "verify": "node scripts/test-migration-staging.mjs",
+    "verify": "node scripts/verify-standalone.mjs",
     "bench:engine": "node --expose-gc --import tsx bench/engine.mjs",
     "test:coverage": "node scripts/run-coverage-tests.mjs"
   },
@@ -85,5 +83,11 @@
     "tsx": "^4.23.13",
     "typescript": "~5.9.3",
     "vite": "7.3.7"
+  },
+  "allowScripts": {
+    "better-sqlite3@11.10.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true,
+    "sharp@0.32.6": true
   }
 }
